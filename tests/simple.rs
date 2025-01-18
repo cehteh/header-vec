@@ -12,6 +12,17 @@ struct TestA {
 }
 
 #[test]
+fn test_empty() {
+    let mut v_empty = HeaderVec::with_capacity(0, TestA { a: 4, b: !0, c: 66 });
+
+    assert_eq!(0, v_empty.len());
+    assert_eq!(0, v_empty.capacity());
+    assert_eq!(0, v_empty.as_slice().len());
+
+    v_empty.extend_from_slice("the quick brown fox jumps over the lazy dog".as_bytes());
+}
+
+#[test]
 fn test_head_array() {
     let mut v_orig = HeaderVec::new(TestA { a: 4, b: !0, c: 66 });
 

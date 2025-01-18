@@ -60,7 +60,6 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     pub fn with_capacity(capacity: usize, head: H) -> Self {
-        assert!(capacity > 0, "HeaderVec capacity cannot be 0");
         // Allocate the initial memory, which is uninitialized.
         let layout = Self::layout(capacity);
         let ptr = unsafe { alloc::alloc::alloc(layout) } as *mut AlignedHeader<H, T>;
@@ -271,8 +270,6 @@ impl<H, T> HeaderVec<H, T> {
             "requested capacity is less than current length"
         );
         let old_capacity = self.capacity();
-        debug_assert_ne!(old_capacity, 0, "capacity of 0 not yet supported");
-        debug_assert_ne!(requested_capacity, 0, "capacity of 0 not yet supported");
 
         let new_capacity = if requested_capacity > old_capacity {
             if exact {
@@ -281,11 +278,14 @@ impl<H, T> HeaderVec<H, T> {
             } else if requested_capacity <= old_capacity * 2 {
                 // doubling the capacity is sufficient
                 old_capacity * 2
-            } else {
+            } else if old_capacity > 0 {
                 // requested more than twice as much space, reserve the next multiple of
                 // old_capacity that is greater than the requested capacity. This gives headroom
                 // for new inserts while not doubling the memory requirement with bulk requests
                 (requested_capacity / old_capacity + 1).saturating_mul(old_capacity)
+            } else {
+                // special case when we start at capacity 0
+                requested_capacity
             }
         } else if exact {
             // exact shrinking
