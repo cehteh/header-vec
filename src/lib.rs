@@ -255,8 +255,8 @@ impl<H, T> HeaderVec<H, T> {
         self.shrink_to(len)
     }
 
-    /// Resize the vector to have at least room for `additional` more elements.
-    /// does exact resizing if `exact` is true.
+    /// Resize the vector to least `requested_capacity` elements.
+    /// Does exact resizing if `exact` is true.
     ///
     /// Returns `Some(*const ())` if the memory was moved to a new location.
     ///
@@ -265,7 +265,8 @@ impl<H, T> HeaderVec<H, T> {
     /// `requested_capacity` must be greater or equal than `self.len()`
     #[cold]
     unsafe fn resize_cold(&mut self, requested_capacity: usize, exact: bool) -> Option<*const ()> {
-        // For efficiency we do only a debug_assert here
+        // For efficiency we do only a debug_assert here, this is a internal unsafe function
+        // it's contract should be already enforced by the caller which is under our control
         debug_assert!(
             self.len_exact() <= requested_capacity,
             "requested capacity is less than current length"
