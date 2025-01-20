@@ -14,3 +14,4 @@ readme = "README.md"
 [features]
 default = ["atomic_append"]
 atomic_append = []
+std = []
