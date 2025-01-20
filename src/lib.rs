@@ -7,6 +7,7 @@ use core::{
     mem::{self, ManuallyDrop},
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr,
+    ptr::NonNull,
     slice::SliceIndex,
 };
 
@@ -51,7 +52,7 @@ union AlignedHeader<H, T> {
 /// All of the data, like our header `OurHeaderType { a: 2 }`, the length of the vector: `2`,
 /// and the contents of the vector `['x', 'z']` resides on the other side of the pointer.
 pub struct HeaderVec<H, T> {
-    ptr: *mut AlignedHeader<H, T>,
+    ptr: NonNull<AlignedHeader<H, T>>,
 }
 
 impl<H, T> HeaderVec<H, T> {
@@ -65,10 +66,10 @@ impl<H, T> HeaderVec<H, T> {
         let layout = Self::layout(capacity);
         let ptr = unsafe { alloc::alloc::alloc(layout) } as *mut AlignedHeader<H, T>;
 
-        // Handle out-of-memory.
-        if ptr.is_null() {
+        let Some(ptr) = NonNull::new(ptr) else {
+            // Handle out-of-memory.
             alloc::alloc::handle_alloc_error(layout);
-        }
+        };
 
         // Create self.
         let mut this = Self { ptr };
@@ -173,14 +174,14 @@ impl<H, T> HeaderVec<H, T> {
     /// This is useful to check if two nodes are the same. Use it with [`HeaderVec::is`].
     #[inline(always)]
     pub fn ptr(&self) -> *const () {
-        self.ptr as *const ()
+        self.ptr.as_ptr() as *const ()
     }
 
     /// This is used to check if this is the `HeaderVec` that corresponds to the given pointer.
     /// This is useful for updating weak references after [`HeaderVec::push`] returns the pointer.
     #[inline(always)]
     pub fn is(&self, ptr: *const ()) -> bool {
-        self.ptr as *const () == ptr
+        self.ptr.as_ptr() as *const () == ptr
     }
 
     /// Create a (dangerous) weak reference to the `HeaderVec`. This is useful to be able
@@ -300,19 +301,21 @@ impl<H, T> HeaderVec<H, T> {
         // Reallocate the pointer.
         let ptr = unsafe {
             alloc::alloc::realloc(
-                self.ptr as *mut u8,
+                self.ptr.as_ptr() as *mut u8,
                 Self::layout(old_capacity),
                 Self::elems_to_mem_bytes(new_capacity),
             ) as *mut AlignedHeader<H, T>
         };
-        // Handle out-of-memory.
-        if ptr.is_null() {
+
+        let Some(ptr) = NonNull::new(ptr) else {
+            // Handle out-of-memory.
             alloc::alloc::handle_alloc_error(Self::layout(new_capacity));
-        }
+        };
+
         // Check if the new pointer is different than the old one.
         let previous_pointer = if ptr != self.ptr {
             // Give the user the old pointer so they can update everything.
-            Some(self.ptr as *const ())
+            Some(self.ptr())
         } else {
             None
         };
@@ -406,13 +409,13 @@ impl<H, T> HeaderVec<H, T> {
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
     fn start_ptr(&self) -> *const T {
-        unsafe { (self.ptr as *const T).add(Self::offset()) }
+        unsafe { (self.ptr.as_ptr() as *const T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
     fn start_ptr_mut(&mut self) -> *mut T {
-        unsafe { (self.ptr as *mut T).add(Self::offset()) }
+        unsafe { (self.ptr.as_ptr() as *mut T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the end of the slice. This returns a mutable pointer to
@@ -425,13 +428,13 @@ impl<H, T> HeaderVec<H, T> {
     #[inline(always)]
     fn header(&self) -> &HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &*(self.ptr as *const HeaderVecHeader<H>) }
+        unsafe { &*(self.ptr.as_ptr() as *const HeaderVecHeader<H>) }
     }
 
     #[inline(always)]
     fn header_mut(&mut self) -> &mut HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &mut *(self.ptr as *mut HeaderVecHeader<H>) }
+        unsafe { &mut *(self.ptr.as_ptr() as *mut HeaderVecHeader<H>) }
     }
 }
 
@@ -572,7 +575,7 @@ impl<H, T> Drop for HeaderVec<H, T> {
             for ix in 0..self.len_exact() {
                 ptr::drop_in_place(self.start_ptr_mut().add(ix));
             }
-            alloc::alloc::dealloc(self.ptr as *mut u8, Self::layout(self.capacity()));
+            alloc::alloc::dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.capacity()));
         }
     }
 }
