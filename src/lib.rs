@@ -276,6 +276,11 @@ impl<H, T> HeaderVec<H, T> {
         );
         let old_capacity = self.capacity();
 
+        // Shortcut when nothing is to be done.
+        if requested_capacity == old_capacity {
+            return None;
+        }
+
         let new_capacity = if requested_capacity > old_capacity {
             if exact {
                 // exact growing
