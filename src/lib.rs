@@ -165,12 +165,12 @@ impl<H, T> HeaderVec<H, T> {
 
     #[inline(always)]
     pub fn as_slice(&self) -> &[T] {
-        unsafe { core::slice::from_raw_parts(self.start_ptr(), self.len_strict()) }
+        unsafe { core::slice::from_raw_parts(self.as_ptr(), self.len_strict()) }
     }
 
     #[inline(always)]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { core::slice::from_raw_parts_mut(self.start_ptr_mut(), self.len_exact()) }
+        unsafe { core::slice::from_raw_parts_mut(self.as_mut_ptr(), self.len_exact()) }
     }
 
     /// This is useful to check if two nodes are the same. Use it with [`HeaderVec::is`].
@@ -183,7 +183,7 @@ impl<H, T> HeaderVec<H, T> {
     /// This is useful for updating weak references after [`HeaderVec::push`] returns the pointer.
     #[inline(always)]
     pub fn is(&self, ptr: *const ()) -> bool {
-        self.ptr.as_ptr() as *const () == ptr
+        self.ptr() == ptr
     }
 
     /// Create a (dangerous) weak reference to the `HeaderVec`. This is useful to be able
@@ -304,7 +304,7 @@ impl<H, T> HeaderVec<H, T> {
         // Reallocate the pointer.
         let ptr = unsafe {
             alloc::alloc::realloc(
-                self.ptr.as_ptr() as *mut u8,
+                self.ptr() as *mut u8,
                 Self::layout(old_capacity),
                 Self::elems_to_mem_bytes(new_capacity),
             ) as *mut AlignedHeader<H, T>
@@ -339,7 +339,7 @@ impl<H, T> HeaderVec<H, T> {
         let new_len = old_len + 1;
         let previous_pointer = self.reserve(1);
         unsafe {
-            core::ptr::write(self.start_ptr_mut().add(old_len), item);
+            core::ptr::write(self.as_mut_ptr().add(old_len), item);
         }
         self.header_mut().len = new_len.into();
         previous_pointer
@@ -356,7 +356,7 @@ impl<H, T> HeaderVec<H, T> {
         let mut head = 0;
         let original_len = self.len_exact();
         // Get the offset of the beginning of the slice.
-        let start_ptr = self.start_ptr_mut();
+        let start_ptr = self.as_mut_ptr();
         // Go through each index.
         for index in 0..original_len {
             unsafe {
@@ -447,33 +447,33 @@ impl<H, T> HeaderVec<H, T> {
 
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
-    fn start_ptr(&self) -> *const T {
-        unsafe { (self.ptr.as_ptr() as *const T).add(Self::offset()) }
+    pub fn as_ptr(&self) -> *const T {
+        unsafe { (self.ptr() as *const T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
-    fn start_ptr_mut(&mut self) -> *mut T {
-        unsafe { (self.ptr.as_ptr() as *mut T).add(Self::offset()) }
+    pub fn as_mut_ptr(&mut self) -> *mut T {
+        unsafe { (self.ptr() as *mut T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the end of the slice. This returns a mutable pointer to
     /// uninitialized memory behind the last element.
     #[inline(always)]
     fn end_ptr_mut(&mut self) -> *mut T {
-        unsafe { self.start_ptr_mut().add(self.len_exact()) }
+        unsafe { self.as_mut_ptr().add(self.len_exact()) }
     }
 
     #[inline(always)]
     fn header(&self) -> &HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &*(self.ptr.as_ptr() as *const HeaderVecHeader<H>) }
+        unsafe { &*(self.ptr() as *const HeaderVecHeader<H>) }
     }
 
     #[inline(always)]
     fn header_mut(&mut self) -> &mut HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &mut *(self.ptr.as_ptr() as *mut HeaderVecHeader<H>) }
+        unsafe { &mut *(self.ptr() as *mut HeaderVecHeader<H>) }
     }
 }
 
@@ -576,7 +576,7 @@ impl<H, T> HeaderVec<H, T> {
     /// uninitialized memory behind the last element.
     #[inline(always)]
     fn end_ptr_atomic_mut(&self) -> *mut T {
-        unsafe { self.start_ptr().add(self.len_atomic_acquire()) as *mut T }
+        unsafe { self.as_ptr().add(self.len_atomic_acquire()) as *mut T }
     }
 }
 
@@ -620,9 +620,9 @@ impl<H, T> Drop for HeaderVec<H, T> {
         unsafe {
             ptr::drop_in_place(&mut self.header_mut().head);
             for ix in 0..self.len_exact() {
-                ptr::drop_in_place(self.start_ptr_mut().add(ix));
+                ptr::drop_in_place(self.as_mut_ptr().add(ix));
             }
-            alloc::alloc::dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.capacity()));
+            alloc::alloc::dealloc(self.ptr() as *mut u8, Self::layout(self.capacity()));
         }
     }
 }
