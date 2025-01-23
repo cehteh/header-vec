@@ -535,11 +535,20 @@ impl<H, T> HeaderVec<H, T> {
 
 impl<H, T: Clone> HeaderVec<H, T> {
     /// Adds items from a slice to the end of the list.
-    ///
-    /// Returns `Some(*const ())` if the memory was moved to a new location.
-    /// In this case, you are responsible for updating the weak nodes.
-    pub fn extend_from_slice(&mut self, slice: &[T]) -> Option<*const ()> {
-        let previous_pointer = self.reserve(slice.len());
+    pub fn extend_from_slice(&mut self, slice: &[T]) {
+        self.extend_from_slice_intern(slice, None)
+    }
+
+    /// Adds items from a slice to the end of the list.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    pub fn extend_from_slice_with_weakfix(&mut self, slice: &[T], weak_fixup: WeakFixupFn) {
+        self.extend_from_slice_intern(slice, Some(weak_fixup));
+    }
+
+    #[inline(always)]
+    fn extend_from_slice_intern(&mut self, slice: &[T], weak_fixup: Option<WeakFixupFn>) {
+        self.reserve_intern(slice.len(), false, weak_fixup);
 
         // copy data
         let end_ptr = self.end_ptr_mut();
@@ -550,8 +559,6 @@ impl<H, T: Clone> HeaderVec<H, T> {
         }
         // correct the len
         self.header_mut().len = (self.len_exact() + slice.len()).into();
-
-        todo!("weak_fixup transformartion") // previous_pointer
     }
 }
 
