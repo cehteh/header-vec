@@ -14,6 +14,10 @@ use core::{
 #[cfg(feature = "atomic_append")]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+/// A closure that becomes called when a `HeaderVec` becomes reallocated.
+/// This is closure is responsible for updating weak nodes.
+pub type WeakFixupFn<'a> = &'a mut dyn FnMut(*const ());
+
 struct HeaderVecHeader<H> {
     head: H,
     capacity: usize,
@@ -223,39 +227,72 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
-    #[inline(always)]
-    pub fn reserve(&mut self, additional: usize) -> Option<*const ()> {
-        if self.spare_capacity() < additional {
-            let len = self.len_exact();
-            unsafe { self.resize_cold(len.saturating_add(additional), false) }
-        } else {
-            None
-        }
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.reserve_intern(additional, false, None);
+    }
+
+    /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    #[inline]
+    pub fn reserve_with_weakfix(&mut self, additional: usize, weak_fixup: WeakFixupFn) {
+        self.reserve_intern(additional, false, Some(weak_fixup));
     }
 
     /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
     #[inline]
-    pub fn reserve_exact(&mut self, additional: usize) -> Option<*const ()> {
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.reserve_intern(additional, true, None);
+    }
+
+    /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    #[inline]
+    pub fn reserve_exact_with_weakfix(&mut self, additional: usize, weak_fixup: WeakFixupFn) {
+        self.reserve_intern(additional, true, Some(weak_fixup));
+    }
+
+    /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
+    #[inline(always)]
+    fn reserve_intern(&mut self, additional: usize, exact: bool, weak_fixup: Option<WeakFixupFn>) {
         if self.spare_capacity() < additional {
             let len = self.len_exact();
-            unsafe { self.resize_cold(len.saturating_add(additional), true) }
-        } else {
-            None
+            // using saturating_add here ensures that we get a allocation error instead wrapping over and
+            // allocating a total wrong size
+            unsafe { self.resize_cold(len.saturating_add(additional), exact, weak_fixup) };
         }
     }
 
     /// Shrinks the capacity of the `HeaderVec` to the `min_capacity` or `self.len()`, whichever is larger.
     #[inline]
-    pub fn shrink_to(&mut self, min_capacity: usize) -> Option<*const ()> {
+    pub fn shrink_to(&mut self, min_capacity: usize) {
         let requested_capacity = self.len_exact().max(min_capacity);
-        unsafe { self.resize_cold(requested_capacity, true) }
+        unsafe { self.resize_cold(requested_capacity, true, None) };
+    }
+
+    /// Shrinks the capacity of the `HeaderVec` to the `min_capacity` or `self.len()`, whichever is larger.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    #[inline]
+    pub fn shrink_to_with_weakfix(&mut self, min_capacity: usize, weak_fixup: WeakFixupFn) {
+        let requested_capacity = self.len_exact().max(min_capacity);
+        unsafe { self.resize_cold(requested_capacity, true, Some(weak_fixup)) };
     }
 
     /// Resizes the vector hold exactly `self.len()` elements.
     #[inline(always)]
-    pub fn shrink_to_fit(&mut self) -> Option<*const ()> {
-        let len = self.len_exact();
-        self.shrink_to(len)
+    pub fn shrink_to_fit(&mut self) {
+        self.shrink_to(0);
+    }
+
+    /// Resizes the vector hold exactly `self.len()` elements.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    #[inline(always)]
+    pub fn shrink_to_fit_with_weakfix(&mut self, weak_fixup: WeakFixupFn) {
+        self.shrink_to_with_weakfix(0, weak_fixup);
     }
 
     /// Resize the vector to least `requested_capacity` elements.
@@ -267,7 +304,12 @@ impl<H, T> HeaderVec<H, T> {
     ///
     /// `requested_capacity` must be greater or equal than `self.len()`
     #[cold]
-    unsafe fn resize_cold(&mut self, requested_capacity: usize, exact: bool) -> Option<*const ()> {
+    unsafe fn resize_cold(
+        &mut self,
+        requested_capacity: usize,
+        exact: bool,
+        weak_fixup: Option<WeakFixupFn>,
+    ) {
         // For efficiency we do only a debug_assert here, this is a internal unsafe function
         // it's contract should be already enforced by the caller which is under our control
         debug_assert!(
@@ -278,7 +320,7 @@ impl<H, T> HeaderVec<H, T> {
 
         // Shortcut when nothing is to be done.
         if requested_capacity == old_capacity {
-            return None;
+            return;
         }
 
         let new_capacity = if requested_capacity > old_capacity {
@@ -322,7 +364,7 @@ impl<H, T> HeaderVec<H, T> {
 
         // Check if the new pointer is different than the old one.
         let previous_pointer = if ptr != self.ptr {
-            // Give the user the old pointer so they can update everything.
+            // Store old pointer for weak_fixup.
             Some(self.ptr())
         } else {
             None
@@ -332,7 +374,8 @@ impl<H, T> HeaderVec<H, T> {
         // And set the new capacity.
         self.header_mut().capacity = new_capacity;
 
-        previous_pointer
+        // Finally run the weak_fixup closure when provided
+        previous_pointer.map(|ptr| weak_fixup.map(|weak_fixup| weak_fixup(ptr)));
     }
 
     /// Adds an item to the end of the list.
@@ -347,7 +390,7 @@ impl<H, T> HeaderVec<H, T> {
             core::ptr::write(self.as_mut_ptr().add(old_len), item);
         }
         self.header_mut().len = new_len.into();
-        previous_pointer
+        todo!("weak_fixup transformartion") // previous_pointer
     }
 
     /// Retains only the elements specified by the predicate.
@@ -500,7 +543,7 @@ impl<H, T: Clone> HeaderVec<H, T> {
         // correct the len
         self.header_mut().len = (self.len_exact() + slice.len()).into();
 
-        previous_pointer
+        todo!("weak_fixup transformartion") // previous_pointer
     }
 }
 
