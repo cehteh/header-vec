@@ -11,6 +11,9 @@ use core::{
     slice::SliceIndex,
 };
 
+
+mod weak;
+pub use weak::HeaderVecWeak;
 #[cfg(feature = "atomic_append")]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -762,29 +765,5 @@ where
             .field("header", &self.header().head)
             .field("vec", &self.as_slice())
             .finish()
-    }
-}
-
-pub struct HeaderVecWeak<H, T> {
-    header_vec: ManuallyDrop<HeaderVec<H, T>>,
-}
-
-impl<H, T> Deref for HeaderVecWeak<H, T> {
-    type Target = HeaderVec<H, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.header_vec
-    }
-}
-
-impl<H, T> DerefMut for HeaderVecWeak<H, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.header_vec
-    }
-}
-
-impl<H, T> Debug for HeaderVecWeak<H, T> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("HeaderVecWeak").finish()
     }
 }
