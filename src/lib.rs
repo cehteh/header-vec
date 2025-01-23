@@ -379,18 +379,26 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     /// Adds an item to the end of the list.
-    ///
-    /// Returns `Some(*const ())` if the memory was moved to a new location.
-    /// In this case, you are responsible for updating the weak nodes.
-    pub fn push(&mut self, item: T) -> Option<*const ()> {
+    pub fn push(&mut self, item: T) {
+        self.push_intern(item, None);
+    }
+
+    /// Adds an item to the end of the list.
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    pub fn push_with_weakfix(&mut self, item: T, weak_fixup: WeakFixupFn) {
+        self.push_intern(item, Some(weak_fixup));
+    }
+
+    #[inline(always)]
+    fn push_intern(&mut self, item: T, weak_fixup: Option<WeakFixupFn>) {
         let old_len = self.len_exact();
         let new_len = old_len + 1;
-        let previous_pointer = self.reserve(1);
+        self.reserve_intern(1, false, weak_fixup);
         unsafe {
             core::ptr::write(self.as_mut_ptr().add(old_len), item);
         }
         self.header_mut().len = new_len.into();
-        todo!("weak_fixup transformartion") // previous_pointer
     }
 
     /// Retains only the elements specified by the predicate.
