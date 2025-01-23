@@ -780,17 +780,22 @@ xmacro::xmacro! {
     // Generates a lot `impl From` for `HeaderVec<(), T>` and `HeaderVec<H, T>`
     // The later variant is initialized from a tuple (H,T).
     $[
-        from:          lt:   generics:        where:
-        (&[T])         ()    ()               ()
-        (&mut [T])     ()    ()               ()
-        (&[T; N])      ()    (const N: usize) ()
-        (&mut[T; N])   ()    (const N: usize) ()
-        ([T; N])       ()    (const N: usize) ()
-        (Cow<'a, [T]>) ('a,) ()               (where [T]: ToOwned)
-        (Box<[T]>)     ()    ()               ()
-        (Vec<T>)       ()    ()               ()
+        attr:
+          from:          lt:   generics:        where:
+        ()(&[T])         ()    ()               ()
+        ()(&mut [T])     ()    ()               ()
+        ()(&[T; N])      ()    (const N: usize) ()
+        ()(&mut[T; N])   ()    (const N: usize) ()
+        ()([T; N])       ()    (const N: usize) ()
+        (#[cfg(feature = "std")])
+          (Cow<'a, [T]>) ('a,) ()               (where [T]: ToOwned)
+        (#[cfg(feature = "std")])
+          (Box<[T]>)     ()    ()               ()
+        (#[cfg(feature = "std")])
+          (Vec<T>)       ()    ()               ()
     ]
 
+    $attr
     impl<$lt T: Clone, $generics> From<$from> for HeaderVec<(), T> $where {
         fn from(from: $from) -> Self {
             let mut hv = HeaderVec::new(());
@@ -799,6 +804,7 @@ xmacro::xmacro! {
         }
     }
 
+    $attr
     impl<$lt H, T: Clone, $generics> From<WithHeader<H, $from>> for HeaderVec<H, T> $where {
         fn from(from: WithHeader<H, $from>) -> Self {
             let mut hv = HeaderVec::new(from.0);
