@@ -11,6 +11,10 @@ use core::{
     slice::SliceIndex,
 };
 
+#[cfg(feature = "std")]
+use std::{
+    borrow::Cow
+};
 
 mod weak;
 pub use weak::HeaderVecWeak;
@@ -765,5 +769,40 @@ where
             .field("header", &self.header().head)
             .field("vec", &self.as_slice())
             .finish()
+    }
+}
+
+/// A helper struct for using the `HeaderVec::from(WithHeader(H, T))`
+pub struct WithHeader<H,T>(pub H, pub T);
+
+xmacro::xmacro! {
+    // Generates a lot `impl From` for `HeaderVec<(), T>` and `HeaderVec<H, T>`
+    // The later variant is initialized from a tuple (H,T).
+    $[
+        from:          lt:   generics:        where:                conv:
+        (&[T])         ()    ()               ()                    ()
+        (&mut [T])     ()    ()               ()                    ()
+        (&[T; N])      ()    (const N: usize) ()                    ()
+        (&mut[T; N])   ()    (const N: usize) ()                    ()
+        ([T; N])       ()    (const N: usize) ()                    (.as_ref())
+        (Cow<'a, [T]>) ('a,) ()               (where [T]: ToOwned)  (.as_ref())
+        (Box<[T]>)     ()    ()               ()                    (.as_ref())
+        (Vec<T>)       ()    ()               ()                    (.as_ref())
+    ]
+
+    impl<$lt T: Clone, $generics> From<$from> for HeaderVec<(), T> $where {
+        fn from(from: $from) -> Self {
+            let mut hv = HeaderVec::new(());
+            hv.extend_from_slice(from $conv);
+            hv
+        }
+    }
+
+    impl<$lt H, T: Clone, $generics> From<WithHeader<H,$from>> for HeaderVec<H, T> $where {
+        fn from(from: WithHeader<H,$from>) -> Self {
+            let mut hv = HeaderVec::new(from.0);
+            hv.extend_from_slice(from.1 $conv);
+            hv
+        }
     }
 }

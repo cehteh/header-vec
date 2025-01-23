@@ -15,3 +15,6 @@ readme = "README.md"
 default = ["atomic_append"]
 atomic_append = []
 std = []
+
+[dependencies]
+xmacro = "0.1.2"
