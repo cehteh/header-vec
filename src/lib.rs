@@ -813,3 +813,19 @@ xmacro::xmacro! {
         }
     }
 }
+
+impl From<&str> for HeaderVec<(), u8> {
+    fn from(from: &str) -> Self {
+        let mut hv = HeaderVec::new(());
+        hv.extend_from_slice(from.as_bytes());
+        hv
+    }
+}
+
+impl<H> From<WithHeader<H, &str>> for HeaderVec<H, u8> {
+    fn from(from: WithHeader<H, &str>) -> Self {
+        let mut hv = HeaderVec::new(from.0);
+        hv.extend_from_slice(from.1.as_bytes());
+        hv
+    }
+}
