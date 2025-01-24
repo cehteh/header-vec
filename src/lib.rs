@@ -3,19 +3,17 @@
 extern crate alloc;
 
 use core::{
+    convert::{AsRef, From},
     fmt::Debug,
     mem::{self, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut, Index, IndexMut},
-    convert::{From, AsRef},
     ptr,
     ptr::NonNull,
     slice::SliceIndex,
 };
 
 #[cfg(feature = "std")]
-use std::{
-    borrow::Cow
-};
+use std::{};
 
 mod weak;
 pub use weak::HeaderVecWeak;
@@ -542,6 +540,14 @@ impl<H, T> HeaderVec<H, T> {
 }
 
 impl<H, T: Clone> HeaderVec<H, T> {
+    /// Creates a new `HeaderVec` with the given header from some data.
+    pub fn from_header_slice(header: H, slice: impl AsRef<[T]>) -> Self {
+        let slice = slice.as_ref();
+        let mut hv = Self::with_capacity(slice.len(), header);
+        hv.extend_from_slice_intern(slice, None);
+        hv
+    }
+
     /// Adds items from a slice to the end of the list.
     pub fn extend_from_slice(&mut self, slice: impl AsRef<[T]>) {
         self.extend_from_slice_intern(slice.as_ref(), None)
@@ -550,7 +556,11 @@ impl<H, T: Clone> HeaderVec<H, T> {
     /// Adds items from a slice to the end of the list.
     /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
     /// updating the weak references as additional parameter.
-    pub fn extend_from_slice_with_weakfix(&mut self, slice: impl AsRef<[T]>, weak_fixup: WeakFixupFn) {
+    pub fn extend_from_slice_with_weakfix(
+        &mut self,
+        slice: impl AsRef<[T]>,
+        weak_fixup: WeakFixupFn,
+    ) {
         self.extend_from_slice_intern(slice.as_ref(), Some(weak_fixup));
     }
 
@@ -773,59 +783,12 @@ where
     }
 }
 
-/// A helper struct for using the `HeaderVec::from(WithHeader(H, T))`
-pub struct WithHeader<H,T>(pub H, pub T);
-
-xmacro::xmacro! {
-    // Generates a lot `impl From` for `HeaderVec<(), T>` and `HeaderVec<H, T>`
-    // The later variant is initialized from a tuple (H,T).
-    $[
-        attr:
-          from:          lt:   generics:        where:
-        ()(&[T])         ()    ()               ()
-        ()(&mut [T])     ()    ()               ()
-        ()(&[T; N])      ()    (const N: usize) ()
-        ()(&mut[T; N])   ()    (const N: usize) ()
-        ()([T; N])       ()    (const N: usize) ()
-        (#[cfg(feature = "std")])
-          (Cow<'a, [T]>) ('a,) ()               (where [T]: ToOwned)
-        (#[cfg(feature = "std")])
-          (Box<[T]>)     ()    ()               ()
-        (#[cfg(feature = "std")])
-          (Vec<T>)       ()    ()               ()
-    ]
-
-    $attr
-    impl<$lt T: Clone, $generics> From<$from> for HeaderVec<(), T> $where {
-        fn from(from: $from) -> Self {
-            let mut hv = HeaderVec::new(());
-            hv.extend_from_slice(from);
-            hv
-        }
-    }
-
-    $attr
-    impl<$lt H, T: Clone, $generics> From<WithHeader<H, $from>> for HeaderVec<H, T> $where {
-        fn from(from: WithHeader<H, $from>) -> Self {
-            let mut hv = HeaderVec::new(from.0);
-            hv.extend_from_slice(from.1);
-            hv
-        }
+impl<H: Default, T: Clone, U> From<U> for HeaderVec<H, T>
+where
+    U: AsRef<[T]>,
+{
+    fn from(from: U) -> Self {
+        HeaderVec::from_header_slice(H::default(), from)
     }
 }
 
-impl From<&str> for HeaderVec<(), u8> {
-    fn from(from: &str) -> Self {
-        let mut hv = HeaderVec::new(());
-        hv.extend_from_slice(from.as_bytes());
-        hv
-    }
-}
-
-impl<H> From<WithHeader<H, &str>> for HeaderVec<H, u8> {
-    fn from(from: WithHeader<H, &str>) -> Self {
-        let mut hv = HeaderVec::new(from.0);
-        hv.extend_from_slice(from.1.as_bytes());
-        hv
-    }
-}

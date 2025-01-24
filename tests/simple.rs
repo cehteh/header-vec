@@ -87,3 +87,16 @@ fn test_extend_from_slice() {
     hv.extend_from_slice(&[3, 4, 5]);
     assert_eq!(hv.as_slice(), &[0, 1, 2, 3, 4, 5]);
 }
+
+#[test]
+fn test_from() {
+    assert_eq!(HeaderVec::<(), i32>::from(&[1, 2, 3]).as_slice(), [1, 2, 3]);
+}
+
+#[test]
+fn test_from_str() {
+    assert_eq!(
+        HeaderVec::<(), u8>::from("test").as_slice(),
+        "test".as_bytes()
+    );
+}
