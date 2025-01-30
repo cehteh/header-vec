@@ -477,6 +477,94 @@ impl<H, T> HeaderVec<H, T> {
         self.header_mut().len = new_len.into();
     }
 
+    /// Shortens a `HeaderVec`, keeping the first `len` elements and dropping
+    /// the rest.
+    ///
+    /// If `len` is greater or equal to the vector's current length, this has
+    /// no effect.
+    ///
+    /// The [`drain`] method can emulate `truncate`, but causes the excess
+    /// elements to be returned instead of dropped.
+    ///
+    /// Note that this method has no effect on the allocated capacity
+    /// of the vector.
+    ///
+    /// # Examples
+    ///
+    /// Truncating a five element `HeaderVec` to two elements:
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut hv: HeaderVec<(), _> = HeaderVec::from([1, 2, 3, 4, 5]);
+    /// hv.truncate(2);
+    /// assert_eq!(hv.as_slice(), [1, 2]);
+    /// ```
+    ///
+    /// No truncation occurs when `len` is greater than the vector's current
+    /// length:
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut hv: HeaderVec<(), _> = HeaderVec::from([1, 2, 3]);
+    /// hv.truncate(8);
+    /// assert_eq!(hv.as_slice(), [1, 2, 3]);
+    /// ```
+    ///
+    /// Truncating when `len == 0` is equivalent to calling the [`clear`]
+    /// method.
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut hv: HeaderVec<(), _> = HeaderVec::from([1, 2, 3]);
+    /// hv.truncate(0);
+    /// assert_eq!(hv.as_slice(), []);
+    /// ```
+    ///
+    /// [`clear`]: HeaderVec::clear
+    pub fn truncate(&mut self, len: usize) {
+        unsafe {
+            let old_len = self.len_exact();
+            if len > old_len {
+                return;
+            }
+            let remaining_len = old_len - len;
+            let s = ptr::slice_from_raw_parts_mut(self.as_mut_ptr().add(len), remaining_len);
+            self.header_mut().len = len.into();
+            ptr::drop_in_place(s);
+        }
+    }
+
+    /// Clears a `HeaderVec`, removing all values.
+    ///
+    /// Note that this method has no effect on the allocated capacity
+    /// of the vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut hv: HeaderVec<(), _> = HeaderVec::from([1, 2, 3]);
+    ///
+    /// hv.clear();
+    ///
+    /// assert!(hv.is_empty());
+    /// ```
+    #[inline]
+    pub fn clear(&mut self) {
+        let elems: *mut [T] = self.as_mut_slice();
+
+        // SAFETY:
+        // - `elems` comes directly from `as_mut_slice` and is therefore valid.
+        // - Setting the length before calling `drop_in_place` means that,
+        //   if an element's `Drop` impl panics, the vector's `Drop` impl will
+        //   do nothing (leaking the rest of the elements) instead of dropping
+        //   some twice.
+        unsafe {
+            self.set_len(0);
+            ptr::drop_in_place(elems);
+        }
+    }
+
     /// Gives the offset in units of T (as if the pointer started at an array of T) that the slice actually starts at.
     #[inline(always)]
     const fn offset() -> usize {
