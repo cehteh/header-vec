@@ -72,7 +72,7 @@ union AlignedHeader<H, T> {
 /// hv.push('z');
 /// ```
 ///
-/// [`HeaderVec`] itself consists solely of a pointer, it's only 8 bytes big.
+/// [`HeaderVec`] itself consists solely of a non-null pointer, it's only 8 bytes big.
 /// All of the data, like our header `OurHeaderType { a: 2 }`, the length of the vector: `2`,
 /// and the contents of the vector `['x', 'z']` resides on the other side of the pointer.
 pub struct HeaderVec<H, T> {
