@@ -12,7 +12,7 @@ license = "MIT"
 readme = "README.md"
 
 [features]
-default = ["atomic_append"]
-atomic_append = []
+default = ["std", "atomic_append"]
 std = []
+atomic_append = []
 
