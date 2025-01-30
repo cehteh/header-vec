@@ -9,6 +9,7 @@ use core::{
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr,
     ptr::NonNull,
+    slice,
     slice::SliceIndex,
 };
 
@@ -16,7 +17,6 @@ use core::{
 use std::{
     // core::range::RangeBounds is unstable, we have to rely on std
     ops::{Range, RangeBounds},
-    slice,
 };
 
 mod weak;
