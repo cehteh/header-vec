@@ -13,10 +13,24 @@ use core::{
 };
 
 #[cfg(feature = "std")]
-use std::{};
+use std::{
+    // core::range::RangeBounds is unstable, we have to rely on std
+    ops::{Range, RangeBounds},
+    slice,
+};
 
 mod weak;
 pub use weak::HeaderVecWeak;
+
+mod drain;
+#[cfg(feature = "std")]
+pub use drain::Drain;
+
+// To implement std/Vec compatibility we would need a few nightly features.
+// For the time being we just reimplement them here until they become stabilized.
+#[cfg(feature = "std")]
+mod future_slice;
+
 #[cfg(feature = "atomic_append")]
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -521,6 +535,7 @@ impl<H, T> HeaderVec<H, T> {
     /// ```
     ///
     /// [`clear`]: HeaderVec::clear
+    /// [`drain`]: HeaderVec::drain
     pub fn truncate(&mut self, len: usize) {
         unsafe {
             let old_len = self.len_exact();
@@ -780,6 +795,76 @@ impl<H, T: Clone> HeaderVec<H, T> {
             Ok(())
         } else {
             Err(slice)
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+/// The methods that depend on stdlib features.
+impl<H, T> HeaderVec<H, T> {
+    /// Removes the specified range from a `HeaderVec` in bulk, returning all
+    /// removed elements as an iterator. If the iterator is dropped before
+    /// being fully consumed, it drops the remaining removed elements.
+    ///
+    /// The returned iterator keeps a mutable borrow on the `HeaderVec` to optimize
+    /// its implementation.
+    ///
+    /// # Feature compatibility
+    ///
+    /// The `drain()` API and `Drain` iterator are only available when the `std` feature is
+    /// enabled.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the starting point is greater than the end point or if
+    /// the end point is greater than the length of the vector.
+    ///
+    /// # Leaking
+    ///
+    /// If the returned iterator goes out of scope without being dropped (due to
+    /// [`mem::forget`], for example), the vector may have lost and leaked
+    /// elements arbitrarily, including elements outside the range.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut v: HeaderVec<(), _> = HeaderVec::from(&[1, 2, 3]);
+    /// let u: Vec<_> = v.drain(1..).collect();
+    /// assert_eq!(v.as_slice(), &[1]);
+    /// assert_eq!(u.as_slice(), &[2, 3]);
+    ///
+    /// // A full range clears the vector, like `clear()` does
+    /// v.drain(..);
+    /// assert_eq!(v.as_slice(), &[]);
+    /// ```
+    pub fn drain<R>(&mut self, range: R) -> Drain<'_, H, T>
+    where
+        R: RangeBounds<usize>,
+    {
+        // Memory safety
+        //
+        // When the Drain is first created, it shortens the length of
+        // the source vector to make sure no uninitialized or moved-from elements
+        // are accessible at all if the Drain's destructor never gets to run.
+        //
+        // Drain will ptr::read out the values to remove.
+        // When finished, remaining tail of the vec is copied back to cover
+        // the hole, and the vector length is restored to the new length.
+        //
+        let len = self.len();
+        let Range { start, end } = future_slice::range(range, ..len);
+
+        unsafe {
+            // set self.vec length's to start, to be safe in case Drain is leaked
+            self.set_len(start);
+            let range_slice = slice::from_raw_parts(self.as_ptr().add(start), end - start);
+            Drain {
+                tail_start: end,
+                tail_len: len - end,
+                iter: range_slice.iter(),
+                vec: NonNull::from(self),
+            }
         }
     }
 }
