@@ -993,3 +993,21 @@ impl<'a, H, T> IntoIterator for &'a mut HeaderVec<H, T> {
     }
 }
 
+impl<H, T> Extend<T> for HeaderVec<H, T> {
+    #[inline]
+    #[track_caller]
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        iter.into_iter().for_each(|item| self.push(item));
+    }
+}
+
+/// Extend implementation that copies elements out of references before pushing them onto the Vec.
+// Note: from std Vec: not implemented here yet
+// This implementation is specialized for slice iterators, where it uses [`copy_from_slice`] to
+// append the entire slice at once.
+impl<'a, H, T: Copy + 'a> Extend<&'a T> for HeaderVec<H, T> {
+    #[track_caller]
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
+        iter.into_iter().for_each(|item| self.push(*item));
+    }
+}

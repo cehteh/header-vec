@@ -111,3 +111,19 @@ fn test_drain() {
     drop(drain);
     assert_eq!(hv.as_slice(), [1, 5, 6]);
 }
+
+#[cfg(feature = "std")]
+#[test]
+fn test_extend() {
+    let mut hv = HeaderVec::new(());
+    hv.extend([1, 2, 3]);
+    assert_eq!(hv.as_slice(), [1, 2, 3]);
+}
+
+#[cfg(feature = "std")]
+#[test]
+fn test_extend_ref() {
+    let mut hv = HeaderVec::<(), i32>::new(());
+    hv.extend([&1, &2, &3]);
+    assert_eq!(hv.as_slice(), [1, 2, 3]);
+}
