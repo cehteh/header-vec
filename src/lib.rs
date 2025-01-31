@@ -249,7 +249,7 @@ impl<H, T> HeaderVec<H, T> {
     /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
-        self.reserve_intern(additional, false, None);
+        self.reserve_intern(additional, false, &mut None);
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
@@ -257,13 +257,13 @@ impl<H, T> HeaderVec<H, T> {
     /// updating the weak references as additional parameter.
     #[inline]
     pub fn reserve_with_weakfix(&mut self, additional: usize, weak_fixup: WeakFixupFn) {
-        self.reserve_intern(additional, false, Some(weak_fixup));
+        self.reserve_intern(additional, false, &mut Some(weak_fixup));
     }
 
     /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
     #[inline]
     pub fn reserve_exact(&mut self, additional: usize) {
-        self.reserve_intern(additional, true, None);
+        self.reserve_intern(additional, true, &mut None);
     }
 
     /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
@@ -271,12 +271,17 @@ impl<H, T> HeaderVec<H, T> {
     /// updating the weak references as additional parameter.
     #[inline]
     pub fn reserve_exact_with_weakfix(&mut self, additional: usize, weak_fixup: WeakFixupFn) {
-        self.reserve_intern(additional, true, Some(weak_fixup));
+        self.reserve_intern(additional, true, &mut Some(weak_fixup));
     }
 
     /// Reserves capacity for at least `additional` more elements to be inserted in the given `HeaderVec`.
     #[inline(always)]
-    fn reserve_intern(&mut self, additional: usize, exact: bool, weak_fixup: Option<WeakFixupFn>) {
+    pub(crate) fn reserve_intern(
+        &mut self,
+        additional: usize,
+        exact: bool,
+        weak_fixup: &mut Option<WeakFixupFn>,
+    ) {
         if self.spare_capacity() < additional {
             let len = self.len_exact();
             // using saturating_add here ensures that we get a allocation error instead wrapping over and
@@ -289,7 +294,7 @@ impl<H, T> HeaderVec<H, T> {
     #[inline]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         let requested_capacity = self.len_exact().max(min_capacity);
-        unsafe { self.resize_cold(requested_capacity, true, None) };
+        unsafe { self.resize_cold(requested_capacity, true, &mut None) };
     }
 
     /// Shrinks the capacity of the `HeaderVec` to the `min_capacity` or `self.len()`, whichever is larger.
@@ -298,7 +303,7 @@ impl<H, T> HeaderVec<H, T> {
     #[inline]
     pub fn shrink_to_with_weakfix(&mut self, min_capacity: usize, weak_fixup: WeakFixupFn) {
         let requested_capacity = self.len_exact().max(min_capacity);
-        unsafe { self.resize_cold(requested_capacity, true, Some(weak_fixup)) };
+        unsafe { self.resize_cold(requested_capacity, true, &mut Some(weak_fixup)) };
     }
 
     /// Resizes the vector hold exactly `self.len()` elements.
@@ -328,7 +333,7 @@ impl<H, T> HeaderVec<H, T> {
         &mut self,
         requested_capacity: usize,
         exact: bool,
-        weak_fixup: Option<WeakFixupFn>,
+        weak_fixup: &mut Option<WeakFixupFn>,
     ) {
         // For efficiency we do only a debug_assert here, this is a internal unsafe function
         // it's contract should be already enforced by the caller which is under our control
@@ -395,23 +400,23 @@ impl<H, T> HeaderVec<H, T> {
         self.header_mut().capacity = new_capacity;
 
         // Finally run the weak_fixup closure when provided
-        previous_pointer.map(|ptr| weak_fixup.map(|weak_fixup| weak_fixup(ptr)));
+        previous_pointer.map(|ptr| weak_fixup.as_mut().map(|weak_fixup| weak_fixup(ptr)));
     }
 
     /// Adds an item to the end of the list.
     pub fn push(&mut self, item: T) {
-        self.push_intern(item, None);
+        self.push_intern(item, &mut None);
     }
 
     /// Adds an item to the end of the list.
     /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
     /// updating the weak references as additional parameter.
     pub fn push_with_weakfix(&mut self, item: T, weak_fixup: WeakFixupFn) {
-        self.push_intern(item, Some(weak_fixup));
+        self.push_intern(item, &mut Some(weak_fixup));
     }
 
     #[inline(always)]
-    fn push_intern(&mut self, item: T, weak_fixup: Option<WeakFixupFn>) {
+    fn push_intern(&mut self, item: T, weak_fixup: &mut Option<WeakFixupFn>) {
         let old_len = self.len_exact();
         let new_len = old_len + 1;
         self.reserve_intern(1, false, weak_fixup);
@@ -647,13 +652,13 @@ impl<H, T: Clone> HeaderVec<H, T> {
     pub fn from_header_slice(header: H, slice: impl AsRef<[T]>) -> Self {
         let slice = slice.as_ref();
         let mut hv = Self::with_capacity(slice.len(), header);
-        hv.extend_from_slice_intern(slice, None);
+        hv.extend_from_slice_intern(slice, &mut None);
         hv
     }
 
     /// Adds items from a slice to the end of the list.
     pub fn extend_from_slice(&mut self, slice: impl AsRef<[T]>) {
-        self.extend_from_slice_intern(slice.as_ref(), None)
+        self.extend_from_slice_intern(slice.as_ref(), &mut None)
     }
 
     /// Adds items from a slice to the end of the list.
@@ -664,11 +669,11 @@ impl<H, T: Clone> HeaderVec<H, T> {
         slice: impl AsRef<[T]>,
         weak_fixup: WeakFixupFn,
     ) {
-        self.extend_from_slice_intern(slice.as_ref(), Some(weak_fixup));
+        self.extend_from_slice_intern(slice.as_ref(), &mut Some(weak_fixup));
     }
 
     #[inline(always)]
-    fn extend_from_slice_intern(&mut self, slice: &[T], weak_fixup: Option<WeakFixupFn>) {
+    fn extend_from_slice_intern(&mut self, slice: &[T], weak_fixup: &mut Option<WeakFixupFn>) {
         self.reserve_intern(slice.len(), false, weak_fixup);
 
         // copy data
