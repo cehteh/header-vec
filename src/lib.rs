@@ -26,6 +26,10 @@ mod drain;
 #[cfg(feature = "std")]
 pub use drain::Drain;
 
+mod splice;
+#[cfg(feature = "std")]
+pub use splice::Splice;
+
 // To implement std/Vec compatibility we would need a few nightly features.
 // For the time being we just reimplement them here until they become stabilized.
 #[cfg(feature = "std")]
@@ -871,6 +875,84 @@ impl<H, T> HeaderVec<H, T> {
                 iter: range_slice.iter(),
                 vec: NonNull::from(self),
             }
+        }
+    }
+
+    /// Creates a splicing iterator that replaces the specified range in the vector
+    /// with the given `replace_with` iterator and yields the removed items.
+    /// `replace_with` does not need to be the same length as `range`.
+    ///
+    /// `range` is removed even if the iterator is not consumed until the end.
+    ///
+    /// It is unspecified how many elements are removed from the vector
+    /// if the `Splice` value is leaked.
+    ///
+    /// The input iterator `replace_with` is only consumed when the `Splice` value is dropped.
+    ///
+    /// This is optimal if:
+    ///
+    /// * The tail (elements in the vector after `range`) is empty,
+    /// * or `replace_with` yields fewer or equal elements than `range`’s length
+    /// * or the lower bound of its `size_hint()` is exact.
+    ///
+    /// Otherwise, a temporary vector is allocated to store the tail elements which are in the way.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the starting point is greater than the end point or if
+    /// the end point is greater than the length of the vector.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use header_vec::HeaderVec;
+    /// let mut hv: HeaderVec<(), i32> = HeaderVec::from([1, 2, 3, 4]);
+    /// let new = [7, 8, 9];
+    /// let u: Vec<_> = hv.splice(1..3, new).collect();
+    /// assert_eq!(hv.as_slice(), [1, 7, 8, 9, 4]);
+    /// assert_eq!(u, [2, 3]);
+    /// ```
+    #[inline]
+    pub fn splice<R, I>(&mut self, range: R, replace_with: I) -> Splice<'_, H, I::IntoIter>
+    where
+        R: RangeBounds<usize>,
+        I: IntoIterator<Item = T>,
+    {
+        self.splice_internal(range, replace_with, None)
+    }
+
+    /// Creates a splicing iterator like [`splice()`].
+    /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
+    /// updating the weak references as additional parameter.
+    #[inline]
+    pub fn splice_with_weakfix<'a, R, I>(
+        &'a mut self,
+        range: R,
+        replace_with: I,
+        weak_fixup: WeakFixupFn<'a>,
+    ) -> Splice<'a, H, I::IntoIter>
+    where
+        R: RangeBounds<usize>,
+        I: IntoIterator<Item = T>,
+    {
+        self.splice_internal(range, replace_with, Some(weak_fixup))
+    }
+
+    #[inline(always)]
+    fn splice_internal<'a, R, I>(
+        &'a mut self,
+        range: R,
+        replace_with: I,
+        weak_fixup: Option<WeakFixupFn<'a>>,
+    ) -> Splice<'a, H, I::IntoIter>
+    where
+        R: RangeBounds<usize>,
+        I: IntoIterator<Item = T>,
+    {
+        Splice {
+            drain: self.drain(range),
+            replace_with: replace_with.into_iter(),
+            weak_fixup,
         }
     }
 }
