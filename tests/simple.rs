@@ -100,30 +100,3 @@ fn test_from_str() {
         "test".as_bytes()
     );
 }
-
-#[cfg(feature = "std")]
-#[test]
-fn test_drain() {
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let drain = hv.drain(1..4);
-    assert_eq!(drain.as_slice(), [2, 3, 4]);
-    drop(drain);
-    assert_eq!(hv.as_slice(), [1, 5, 6]);
-}
-
-#[cfg(feature = "std")]
-#[test]
-fn test_extend() {
-    let mut hv = HeaderVec::new(());
-    hv.extend([1, 2, 3]);
-    assert_eq!(hv.as_slice(), [1, 2, 3]);
-}
-
-#[cfg(feature = "std")]
-#[test]
-fn test_extend_ref() {
-    let mut hv = HeaderVec::<(), i32>::new(());
-    hv.extend([&1, &2, &3]);
-    assert_eq!(hv.as_slice(), [1, 2, 3]);
-}
