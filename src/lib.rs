@@ -85,6 +85,7 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     pub fn with_capacity(capacity: usize, head: H) -> Self {
+        const { assert!(mem::size_of::<T>() > 0, "HeaderVec does not support ZST's") };
         // Allocate the initial memory, which is uninitialized.
         let layout = Self::layout(capacity);
         let ptr = unsafe { alloc::alloc::alloc(layout) } as *mut AlignedHeader<H, T>;

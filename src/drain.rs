@@ -99,24 +99,21 @@ impl<H, T> Drain<'_, H, T> {
             let unyielded_len = this.iter.len();
             let unyielded_ptr = this.iter.as_slice().as_ptr();
 
-            // ZSTs have no identity, so we don't need to move them around.
-            if std::mem::size_of::<T>() != 0 {
-                let start_ptr = source_vec.as_mut_ptr().add(start);
+            let start_ptr = source_vec.as_mut_ptr().add(start);
 
-                // memmove back unyielded elements
-                if unyielded_ptr != start_ptr {
-                    let src = unyielded_ptr;
-                    let dst = start_ptr;
+            // memmove back unyielded elements
+            if unyielded_ptr != start_ptr {
+                let src = unyielded_ptr;
+                let dst = start_ptr;
 
-                    ptr::copy(src, dst, unyielded_len);
-                }
+                ptr::copy(src, dst, unyielded_len);
+            }
 
-                // memmove back untouched tail
-                if tail != (start + unyielded_len) {
-                    let src = source_vec.as_ptr().add(tail);
-                    let dst = start_ptr.add(unyielded_len);
-                    ptr::copy(src, dst, this.tail_len());
-                }
+            // memmove back untouched tail
+            if tail != (start + unyielded_len) {
+                let src = source_vec.as_ptr().add(tail);
+                let dst = start_ptr.add(unyielded_len);
+                ptr::copy(src, dst, this.tail_len());
             }
 
             source_vec.set_len(start + unyielded_len + this.tail_len());
@@ -189,20 +186,6 @@ impl<H, T> Drop for Drain<'_, H, T> {
         let drop_len = iter.len();
 
         let mut vec = self.vec;
-
-        // unstable: if T::IS_ZST {  instead we use size_of
-        if mem::size_of::<T>() == 0 {
-            // ZSTs have no identity, so we don't need to move them around, we only need to drop the correct amount.
-            // this can be achieved by manipulating the Vec length instead of moving values out from `iter`.
-            unsafe {
-                let vec = vec.as_mut();
-                let old_len = vec.len();
-                vec.set_len(old_len + drop_len + self.tail_len());
-                vec.truncate(old_len + self.tail_len());
-            }
-
-            return;
-        }
 
         // ensure elements are moved back into their appropriate places, even when drop_in_place panics
         let _guard = DropGuard(self);
