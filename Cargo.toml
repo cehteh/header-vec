@@ -16,3 +16,5 @@ default = ["std", "atomic_append"]
 std = []
 atomic_append = []
 
+[dev-dependencies]
+xmacro = "0.2.0"

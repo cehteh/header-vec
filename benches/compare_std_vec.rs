@@ -126,3 +126,95 @@ fn test_regular_vec_create(b: &mut Bencher) {
 //         acc
 //     });
 // }
+
+#[cfg(feature = "std")]
+mod stdbench {
+    use super::*;
+    use std::ops::{Range, RangeBounds};
+    use xmacro::xmacro;
+
+    xmacro! {
+        $[
+            benchfunc:      type:
+            hv_drain_bench  (HeaderVec::<(), _>)
+            vec_drain_bench (Vec)
+        ]
+
+        fn $benchfunc<T, R>(b: &mut Bencher, init: &[T], range: R)
+        where
+            T: Clone + Default,
+            R: RangeBounds<usize> + Clone,
+        {
+            b.iter(|| {
+                let mut v = $type::from(init);
+                v.drain(range.clone());
+                v
+            });
+        }
+    }
+
+    xmacro! {
+        $[
+            bench: init:       range:
+            middle [123; 1000] (100..500)
+            begin  [123; 1000] (..500)
+            end    [123; 1000] (100..)
+        ]
+
+        #[bench]
+        fn $+test_hv_drain_$bench(b: &mut Bencher) {
+            hv_drain_bench(b, &$init, $range);
+        }
+
+        #[bench]
+        fn $+test_vec_drain_$bench(b: &mut Bencher) {
+            vec_drain_bench(b, &$init, $range);
+        }
+    }
+
+    xmacro! {
+        $[
+            benchfunc:       type:
+            hv_splice_bench  (HeaderVec::<(), _>)
+            vec_splice_bench (Vec)
+        ]
+
+        fn $benchfunc<T, R, I>(b: &mut Bencher, init: &[T], range: R, replace_with: I)
+        where
+            T: Clone + Default,
+            R: RangeBounds<usize> + Clone,
+            I: IntoIterator<Item = T> + Clone,
+        {
+            b.iter(|| {
+                let mut v = $type::from(init);
+                v.splice(range.clone(), replace_with.clone());
+                v
+            });
+        }
+    }
+
+    xmacro! {
+        $[
+            bench:         init:       range:     replace_with:
+            nop            [123; 1000] (0..0)     []
+            insert         [123; 1000] (100..100) [123;500]
+            remove         [123; 1000] (100..600) []
+            middle_shorter [123; 1000] (400..500) [234;50]
+            middle_longer  [123; 1000] (400..500) [345;200]
+            middle_same    [123; 1000] (400..500) [456;100]
+            end_shorter    [123; 1000] (900..)    [234;50]
+            end_longer     [123; 1000] (900..)    [345;200]
+            end_same       [123; 1000] (900..)    [456;100]
+        ]
+
+        #[bench]
+        fn $+test_hv_splice_$bench(b: &mut Bencher) {
+            hv_splice_bench(b, &$init, $range, $replace_with)
+        }
+
+        #[bench]
+        fn $+test_vec_splice_$bench(b: &mut Bencher) {
+            vec_splice_bench(b, &$init, $range, $replace_with)
+        }
+    }
+}
