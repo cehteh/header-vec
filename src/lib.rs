@@ -381,7 +381,7 @@ impl<H, T> HeaderVec<H, T> {
     const fn offset() -> usize {
         // The first location, in units of size_of::<T>(), that is after the header
         // It's the end of the header, rounded up to the nearest size_of::<T>()
-        mem::size_of::<AlignedHeader<H, T>>() / mem::size_of::<T>()
+        (mem::size_of::<AlignedHeader<H, T>>()-1) / mem::size_of::<T>() + 1
     }
 
     /// Compute the number of elements (in units of T) to allocate for a given capacity.
