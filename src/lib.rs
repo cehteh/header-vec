@@ -462,8 +462,52 @@ impl<H, T: Clone> HeaderVec<H, T> {
 
 #[cfg(feature = "atomic_append")]
 /// The atomic append API is only enabled when the `atomic_append` feature flag is set (which
-/// is the default).
+/// is the default). The [`push_atomic()`] or [`extend_from_slice_atomic()`] methods then
+/// become available and some internals using atomic operations.
+///
+/// This API implements interior-mutable appending to a shared `HeaderVec`. To other threads
+/// the appended elements are either not seen or all seen at once. Without additional
+/// synchronization these appends are racy but memory safe. The intention behind this API is to
+/// provide facilities for building other container abstractions the benefit from the shared
+/// non blocking nature while being unaffected from the racy semantics or provide synchronization
+/// on their own (Eg: reference counted data, interners, streaming parsers, etc). Since the
+/// `HeaderVec` is a shared object and we have only a `&self`, it can not be reallocated and moved,
+/// therefore appending can only be done within the reserved capacity.
+///
+/// # Safety
+///
+/// Only one single thread must try to [`push_atomic()`] or [`extend_from_slice_atomic()`] the
+/// `HeaderVec` at at time using the atomic append API's. The actual implementations of this
+/// restriction is left to the caller.  This can be done by mutexes or guard objects. Or
+/// simply by staying single threaded or ensuring somehow else that there is only a single
+/// thread using the atomic_appending API.
 impl<H, T> HeaderVec<H, T> {
+    /// Atomically adds an item to the end of the list without reallocation.
+    ///
+    /// # Errors
+    ///
+    /// If the vector is full, the item is returned.
+    ///
+    /// # Safety
+    ///
+    /// There must be only one thread calling this method at any time. Synchronization has to
+    /// be provided by the user.
+    pub unsafe fn push_atomic(&self, item: T) -> Result<(), T> {
+        // relaxed is good enough here because this should be the only thread calling this method.
+        let len = self.len_atomic_relaxed();
+        if len < self.capacity() {
+            unsafe {
+                core::ptr::write(self.end_ptr_atomic_mut(), item);
+            };
+            let len_again = self.len_atomic_add_release(1);
+            // in debug builds we check for races, the chance to catch these are still pretty minimal
+            debug_assert_eq!(len_again, len, "len was updated by another thread");
+            Ok(())
+        } else {
+            Err(item)
+        }
+    }
+
     /// Get the length of the vector with `Ordering::Acquire`. This ensures that the length is
     /// properly synchronized after it got atomically updated.
     #[inline(always)]
@@ -504,32 +548,6 @@ impl<H, T> HeaderVec<H, T> {
     #[inline(always)]
     fn end_ptr_atomic_mut(&self) -> *mut T {
         unsafe { self.start_ptr().add(self.len_atomic_acquire()) as *mut T }
-    }
-
-    /// Atomically adds an item to the end of the list without reallocation.
-    ///
-    /// # Errors
-    ///
-    /// If the vector is full, the item is returned.
-    ///
-    /// # Safety
-    ///
-    /// There must be only one thread calling this method at any time. Synchronization has to
-    /// be provided by the user.
-    pub unsafe fn push_atomic(&self, item: T) -> Result<(), T> {
-        // relaxed is good enough here because this should be the only thread calling this method.
-        let len = self.len_atomic_relaxed();
-        if len < self.capacity() {
-            unsafe {
-                core::ptr::write(self.end_ptr_atomic_mut(), item);
-            };
-            let len_again = self.len_atomic_add_release(1);
-            // in debug builds we check for races, the chance to catch these are still pretty minimal
-            debug_assert_eq!(len_again, len, "len was updated by another thread");
-            Ok(())
-        } else {
-            Err(item)
-        }
     }
 }
 
