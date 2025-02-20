@@ -533,16 +533,6 @@ impl<H, T> HeaderVec<H, T> {
         self.header().len.fetch_add(n, Ordering::Release)
     }
 
-    #[inline(always)]
-    pub fn is_empty_atomic_acquire(&self) -> bool {
-        self.len_atomic_acquire() == 0
-    }
-
-    #[inline(always)]
-    pub fn as_slice_atomic_acquire(&self) -> &[T] {
-        unsafe { core::slice::from_raw_parts(self.start_ptr(), self.len_atomic_acquire()) }
-    }
-
     /// Gets the pointer to the end of the slice. This returns a mutable pointer to
     /// uninitialized memory behind the last element.
     #[inline(always)]
