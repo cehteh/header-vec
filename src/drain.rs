@@ -32,7 +32,7 @@ pub struct Drain<'a, H, T> {
     /// Index of tail to preserve
     pub(super) tail_start: usize,
     /// End index of tail to preserve
-    pub(super) tail_end: usize,
+    pub(super) tail_len: usize,
     /// Current remaining range to remove
     pub(super) iter: slice::Iter<'a, T>,
     pub(super) vec: NonNull<HeaderVec<H, T>>,
@@ -113,15 +113,11 @@ impl<H, T> Drain<'_, H, T> {
             if tail != (start + unyielded_len) {
                 let src = source_vec.as_ptr().add(tail);
                 let dst = start_ptr.add(unyielded_len);
-                ptr::copy(src, dst, this.tail_len());
+                ptr::copy(src, dst, this.tail_len);
             }
 
-            source_vec.set_len(start + unyielded_len + this.tail_len());
+            source_vec.set_len(start + unyielded_len + this.tail_len);
         }
-    }
-
-    pub(crate) fn tail_len(&self) -> usize {
-        self.tail_end - self.tail_start
     }
 }
 
@@ -165,7 +161,7 @@ impl<H, T> Drop for Drain<'_, H, T> {
 
         impl<H, T> Drop for DropGuard<'_, '_, H, T> {
             fn drop(&mut self) {
-                if self.0.tail_len() > 0 {
+                if self.0.tail_len > 0 {
                     unsafe {
                         let source_vec = self.0.vec.as_mut();
                         // memmove back untouched tail, update to new length
@@ -174,9 +170,9 @@ impl<H, T> Drop for Drain<'_, H, T> {
                         if tail != start {
                             let src = source_vec.as_ptr().add(tail);
                             let dst = source_vec.as_mut_ptr().add(start);
-                            ptr::copy(src, dst, self.0.tail_len());
+                            ptr::copy(src, dst, self.0.tail_len);
                         }
-                        source_vec.set_len(start + self.0.tail_len());
+                        source_vec.set_len(start + self.0.tail_len);
                     }
                 }
             }

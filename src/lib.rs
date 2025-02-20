@@ -872,7 +872,7 @@ impl<H, T> HeaderVec<H, T> {
             let range_slice = slice::from_raw_parts(self.as_ptr().add(start), end - start);
             Drain {
                 tail_start: end,
-                tail_end: len,
+                tail_len: len - end,
                 iter: range_slice.iter(),
                 vec: NonNull::from(self),
             }

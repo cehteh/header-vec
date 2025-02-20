@@ -2,6 +2,7 @@
 #![cfg(feature = "std")]
 
 use header_vec::*;
+use xmacro::xmacro;
 
 #[test]
 fn test_extend() {
@@ -27,161 +28,38 @@ fn test_drain() {
     assert_eq!(hv.as_slice(), [1, 5, 6]);
 }
 
-#[test]
-fn test_splice_nop() {
-    // drain at begin
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
+xmacro! {
+    $[
+        // tests with simple i32 lists
+        name:                  init:              range: replace:     drained: result:
+        nop_begin              [1, 2, 3, 4, 5, 6] (0..0) []           []       [1, 2, 3, 4, 5, 6]
+        nop_middle             [1, 2, 3, 4, 5, 6] (3..3) []           []       [1, 2, 3, 4, 5, 6]
+        nop_end                [1, 2, 3, 4, 5, 6] (6..6) []           []       [1, 2, 3, 4, 5, 6]
+        insert_begin           [1, 2, 3, 4, 5, 6] (0..0) [-1, 0]      []       [-1, 0, 1, 2, 3, 4, 5, 6]
+        insert_middle          [1, 2, 3, 4, 5, 6] (3..3) [33, 34]     []       [1, 2, 3, 33, 34, 4, 5, 6]
+        insert_end             [1, 2, 3, 4, 5, 6] (6..6) [7, 8]       []       [1, 2, 3, 4, 5, 6, 7, 8]
+        remove_begin           [1, 2, 3, 4, 5, 6] (0..2) []           [1, 2]   [3, 4, 5, 6]
+        remove_middle          [1, 2, 3, 4, 5, 6] (3..5) []           [4, 5]   [1, 2, 3, 6]
+        remove_end             [1, 2, 3, 4, 5, 6] (4..)  []           [5, 6]   [1, 2, 3, 4]
+        replace_begin_shorter  [1, 2, 3, 4, 5, 6] (0..2) [11]         [1, 2]   [11,3, 4, 5, 6]
+        replace_middle_shorter [1, 2, 3, 4, 5, 6] (3..5) [44]         [4, 5]   [1, 2, 3, 44, 6]
+        replace_end_shorter    [1, 2, 3, 4, 5, 6] (4..)  [55]         [5, 6]   [1, 2, 3, 4, 55]
+        replace_begin_same     [1, 2, 3, 4, 5, 6] (0..2) [11, 22]     [1, 2]   [11, 22, 3, 4, 5, 6]
+        replace_middle_same    [1, 2, 3, 4, 5, 6] (3..5) [44, 55]     [4, 5]   [1, 2, 3, 44,55, 6]
+        replace_end_same       [1, 2, 3, 4, 5, 6] (4..)  [55, 66]     [5, 6]   [1, 2, 3, 4, 55, 66]
+        replace_begin_longer   [1, 2, 3, 4, 5, 6] (0..2) [11, 22, 33] [1, 2]   [11, 22, 33, 3, 4, 5, 6]
+        replace_middle_longer  [1, 2, 3, 4, 5, 6] (3..5) [44, 55, 66] [4, 5]   [1, 2, 3, 44, 55, 66, 6]
+        replace_end_longer     [1, 2, 3, 4, 5, 6] (4..)  [66, 77, 88] [5, 6]   [1, 2, 3, 4, 66, 77, 88]
+        big_nop                [[1; 64]; 64]      (0..0) [[0; 64]; 0] [[0; 64]; 0] [[1; 64]; 64]
+    ]
 
-    let splice = hv.splice(0..0, []);
+    #[test]
+    fn $+test_splice_$name() {
+        let mut hv = HeaderVec::from_header_slice((), $init);
+        let splice = hv.splice($range, $replace);
 
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4, 5, 6]);
-
-    // drain inbetween
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..3, []);
-
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4, 5, 6]);
-
-    // drain at end
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(6..6, []);
-
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4, 5, 6]);
+        assert_eq!(splice.drained_slice(), $drained);
+        drop(splice);
+        assert_eq!(hv.as_slice(), $result);
+    }
 }
-
-#[test]
-fn test_splice_insert() {
-    // drain at begin
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(..0, [-2, -1, 0]);
-
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [-2, -1, 0, 1, 2, 3, 4, 5, 6]);
-
-    // drain inbetween
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..3, [31, 32, 33]);
-
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 31, 32, 33, 4, 5, 6]);
-
-    // drain at end
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(6.., [7, 8, 9]);
-
-    assert_eq!(splice.drained_slice(), []);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
-}
-
-#[test]
-fn test_splice_remove() {
-    // drain at begin
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(..2, []);
-
-    assert_eq!(splice.drained_slice(), [1, 2]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [3, 4, 5, 6]);
-
-    // drain inbetween
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..5, []);
-
-    assert_eq!(splice.drained_slice(), [4, 5]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 6]);
-
-    // drain at end
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(4.., []);
-
-    assert_eq!(splice.drained_slice(), [5, 6]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4]);
-
-    // drain all
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(.., []);
-
-    assert_eq!(splice.drained_slice(), [1, 2, 3, 4, 5, 6]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), []);
-}
-
-#[test]
-fn test_splice_replace() {
-    // same length
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..5, [44, 55]);
-
-    assert_eq!(splice.drained_slice(), [4, 5]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 44, 55, 6]);
-
-    // shorter
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..5, [44]);
-
-    assert_eq!(splice.drained_slice(), [4, 5]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 44, 6]);
-
-    // longer
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(4..5, [44, 55]);
-
-    assert_eq!(splice.drained_slice(), [5]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 4, 44, 55, 6]);
-
-    // longer than tail
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(3..5, [44, 55, 56, 57, 58, 59]);
-
-    assert_eq!(splice.drained_slice(), [4, 5]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [1, 2, 3, 44, 55, 56, 57, 58, 59, 6]);
-
-    // all
-    let mut hv = HeaderVec::from_header_slice((), [1, 2, 3, 4, 5, 6]);
-
-    let splice = hv.splice(.., [11, 22, 33]);
-
-    assert_eq!(splice.drained_slice(), [1, 2, 3, 4, 5, 6]);
-    drop(splice);
-    assert_eq!(hv.as_slice(), [11, 22, 33]);
-}
-
-// #[test]
-// fn test_splice_zst() {
-//     // same length
-//     let mut hv = HeaderVec::from_header_slice((), [(),(),(),(),(),()]);
-//
-//     // let splice = hv.splice(3..5, [(),()]);
-//     //
-//     // assert_eq!(splice.drained_slice(), [(),()]);
-//     // drop(splice);
-//     // assert_eq!(hv.as_slice(), [(),(),(),(),(),()]);
-// }
