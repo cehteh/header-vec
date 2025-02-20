@@ -2,6 +2,7 @@
 
 extern crate std;
 extern crate test;
+use xmacro::xmacro;
 
 use header_vec::*;
 use test::Bencher;
@@ -127,11 +128,48 @@ fn test_regular_vec_create(b: &mut Bencher) {
 //     });
 // }
 
+xmacro! {
+    $[
+        benchfunc:       type:
+        hv_create_bench  (HeaderVec::<(), _>)
+        vec_create_bench (Vec)
+    ]
+
+    fn $benchfunc<T>(b: &mut Bencher, init: &[T])
+    where
+        T: Clone + Default,
+    {
+        b.iter(|| {
+            let v = $type::from(init);
+            v
+        });
+    }
+}
+
+xmacro! {
+    // benching construction times.
+    $[
+        bench: init:
+        small  [123; 1]
+        middle [123; 1000]
+        large  [[123;32]; 100000]
+    ]
+
+    #[bench]
+    fn $+bench_hv_create_$bench(b: &mut Bencher) {
+        hv_create_bench(b, &$init);
+    }
+
+    #[bench]
+    fn $+bench_vec_create_$bench(b: &mut Bencher) {
+        vec_create_bench(b, &$init);
+    }
+}
+
 #[cfg(feature = "std")]
 mod stdbench {
     use super::*;
-    use std::ops::{Range, RangeBounds};
-    use xmacro::xmacro;
+    use std::ops::RangeBounds;
 
     xmacro! {
         $[
@@ -156,18 +194,18 @@ mod stdbench {
     xmacro! {
         $[
             bench: init:       range:
-            middle [123; 1000] (100..500)
-            begin  [123; 1000] (..500)
-            end    [123; 1000] (100..)
+            begin  [123; 10000] (..5000)
+            middle [123; 10000] (1000..5000)
+            end    [123; 10000] (1000..)
         ]
 
         #[bench]
-        fn $+test_hv_drain_$bench(b: &mut Bencher) {
+        fn $+bench_hv_drain_$bench(b: &mut Bencher) {
             hv_drain_bench(b, &$init, $range);
         }
 
         #[bench]
-        fn $+test_vec_drain_$bench(b: &mut Bencher) {
+        fn $+bench_vec_drain_$bench(b: &mut Bencher) {
             vec_drain_bench(b, &$init, $range);
         }
     }
@@ -181,7 +219,7 @@ mod stdbench {
 
         fn $benchfunc<T, R, I>(b: &mut Bencher, init: &[T], range: R, replace_with: I)
         where
-            T: Clone + Default,
+            T: Clone,
             R: RangeBounds<usize> + Clone,
             I: IntoIterator<Item = T> + Clone,
         {
@@ -195,25 +233,28 @@ mod stdbench {
 
     xmacro! {
         $[
-            bench:         init:       range:     replace_with:
-            nop            [123; 1000] (0..0)     []
-            insert         [123; 1000] (100..100) [123;500]
-            remove         [123; 1000] (100..600) []
-            middle_shorter [123; 1000] (400..500) [234;50]
-            middle_longer  [123; 1000] (400..500) [345;200]
-            middle_same    [123; 1000] (400..500) [456;100]
-            end_shorter    [123; 1000] (900..)    [234;50]
-            end_longer     [123; 1000] (900..)    [345;200]
-            end_same       [123; 1000] (900..)    [456;100]
+            bench:           init:              range:       replace_with:
+            nop              [123; 10000]       (0..0)       []
+            insert           [123; 10000]       (1000..1000) [123; 5000]
+            insert_big       [[123;64]; 10000]  (1000..1000) [[123; 64]; 5000]
+            remove           [123; 10000]       (1000..6000) []
+            middle_shorter   [123; 10000]       (4000..5000) [234; 500]
+            middle_longer    [123; 10000]       (4000..5000) [345; 2000]
+            middle_same      [123; 10000]       (4000..5000) [456; 1000]
+            end_shorter      [123; 10000]       (9000..)     [234; 500]
+            end_longer       [123; 10000]       (9000..)     [345; 2000]
+            end_same         [123; 10000]       (9000..)     [456; 1000]
+            append_big       [[123;64]; 10000]  (10000..)    [[456; 64]; 5000]
+            append_front_big [[123;64]; 100000] (0..0)       [[456; 64]; 1]
         ]
 
         #[bench]
-        fn $+test_hv_splice_$bench(b: &mut Bencher) {
+        fn $+bench_hv_splice_$bench(b: &mut Bencher) {
             hv_splice_bench(b, &$init, $range, $replace_with)
         }
 
         #[bench]
-        fn $+test_vec_splice_$bench(b: &mut Bencher) {
+        fn $+bench_vec_splice_$bench(b: &mut Bencher) {
             vec_splice_bench(b, &$init, $range, $replace_with)
         }
     }
