@@ -496,7 +496,8 @@ impl<H, T> HeaderVec<H, T> {
     pub unsafe fn set_len(&mut self, new_len: usize) {
         debug_assert!(
             new_len <= self.capacity(),
-            "new_len is greater than capacity"
+            "new_len [{new_len}] is greater than capacity [{}]",
+            self.capacity()
         );
         self.header_mut().len = new_len.into();
     }
