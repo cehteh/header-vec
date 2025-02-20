@@ -961,10 +961,8 @@ impl<H, T> HeaderVec<H, T> {
 impl<H, T> Drop for HeaderVec<H, T> {
     fn drop(&mut self) {
         unsafe {
+            ptr::drop_in_place(self.as_mut_slice());
             ptr::drop_in_place(&mut self.header_mut().head);
-            for ix in 0..self.len_exact() {
-                ptr::drop_in_place(self.as_mut_ptr().add(ix));
-            }
             alloc::alloc::dealloc(self.ptr() as *mut u8, Self::layout(self.capacity()));
         }
     }
