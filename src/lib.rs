@@ -7,6 +7,7 @@ use core::{
     mem::{self, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr,
+    ptr::NonNull,
     slice::SliceIndex,
 };
 
@@ -51,7 +52,7 @@ union AlignedHeader<H, T> {
 /// All of the data, like our header `OurHeaderType { a: 2 }`, the length of the vector: `2`,
 /// and the contents of the vector `['x', 'z']` resides on the other side of the pointer.
 pub struct HeaderVec<H, T> {
-    ptr: *mut AlignedHeader<H, T>,
+    ptr: NonNull<AlignedHeader<H, T>>,
 }
 
 impl<H, T> HeaderVec<H, T> {
@@ -64,10 +65,10 @@ impl<H, T> HeaderVec<H, T> {
         let layout = Self::layout(capacity);
         let ptr = unsafe { alloc::alloc::alloc(layout) } as *mut AlignedHeader<H, T>;
 
-        // Handle out-of-memory.
-        if ptr.is_null() {
+        let Some(ptr) = NonNull::new(ptr) else {
+            // Handle out-of-memory.
             alloc::alloc::handle_alloc_error(layout);
-        }
+        };
 
         // Create self.
         let mut this = Self { ptr };
@@ -172,14 +173,14 @@ impl<H, T> HeaderVec<H, T> {
     /// This is useful to check if two nodes are the same. Use it with [`HeaderVec::is`].
     #[inline(always)]
     pub fn ptr(&self) -> *const () {
-        self.ptr as *const ()
+        self.ptr.as_ptr() as *const ()
     }
 
     /// This is used to check if this is the `HeaderVec` that corresponds to the given pointer.
     /// This is useful for updating weak references after [`HeaderVec::push`] returns the pointer.
     #[inline(always)]
     pub fn is(&self, ptr: *const ()) -> bool {
-        self.ptr as *const () == ptr
+        self.ptr.as_ptr() as *const () == ptr
     }
 
     /// Create a (dangerous) weak reference to the `HeaderVec`. This is useful to be able
@@ -254,8 +255,8 @@ impl<H, T> HeaderVec<H, T> {
         self.shrink_to(len)
     }
 
-    /// Resize the vector to have at least room for `additional` more elements.
-    /// does exact resizing if `exact` is true.
+    /// Resize the vector to least `requested_capacity` elements.
+    /// Does exact resizing if `exact` is true.
     ///
     /// Returns `Some(*const ())` if the memory was moved to a new location.
     ///
@@ -264,7 +265,8 @@ impl<H, T> HeaderVec<H, T> {
     /// `requested_capacity` must be greater or equal than `self.len()`
     #[cold]
     unsafe fn resize_cold(&mut self, requested_capacity: usize, exact: bool) -> Option<*const ()> {
-        // For efficiency we do only a debug_assert here
+        // For efficiency we do only a debug_assert here, this is a internal unsafe function
+        // it's contract should be already enforced by the caller which is under our control
         debug_assert!(
             self.len_exact() <= requested_capacity,
             "requested capacity is less than current length"
@@ -299,19 +301,21 @@ impl<H, T> HeaderVec<H, T> {
         // Reallocate the pointer.
         let ptr = unsafe {
             alloc::alloc::realloc(
-                self.ptr as *mut u8,
+                self.ptr.as_ptr() as *mut u8,
                 Self::layout(old_capacity),
                 Self::elems_to_mem_bytes(new_capacity),
             ) as *mut AlignedHeader<H, T>
         };
-        // Handle out-of-memory.
-        if ptr.is_null() {
+
+        let Some(ptr) = NonNull::new(ptr) else {
+            // Handle out-of-memory.
             alloc::alloc::handle_alloc_error(Self::layout(new_capacity));
-        }
+        };
+
         // Check if the new pointer is different than the old one.
         let previous_pointer = if ptr != self.ptr {
             // Give the user the old pointer so they can update everything.
-            Some(self.ptr as *const ())
+            Some(self.ptr())
         } else {
             None
         };
@@ -413,7 +417,7 @@ impl<H, T> HeaderVec<H, T> {
     const fn offset() -> usize {
         // The first location, in units of size_of::<T>(), that is after the header
         // It's the end of the header, rounded up to the nearest size_of::<T>()
-        mem::size_of::<AlignedHeader<H, T>>() / mem::size_of::<T>()
+        (mem::size_of::<AlignedHeader<H, T>>() - 1) / mem::size_of::<T>() + 1
     }
 
     /// Compute the number of elements (in units of T) to allocate for a given capacity.
@@ -441,13 +445,13 @@ impl<H, T> HeaderVec<H, T> {
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
     fn start_ptr(&self) -> *const T {
-        unsafe { (self.ptr as *const T).add(Self::offset()) }
+        unsafe { (self.ptr.as_ptr() as *const T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the start of the slice.
     #[inline(always)]
     fn start_ptr_mut(&mut self) -> *mut T {
-        unsafe { (self.ptr as *mut T).add(Self::offset()) }
+        unsafe { (self.ptr.as_ptr() as *mut T).add(Self::offset()) }
     }
 
     /// Gets the pointer to the end of the slice. This returns a mutable pointer to
@@ -460,13 +464,13 @@ impl<H, T> HeaderVec<H, T> {
     #[inline(always)]
     fn header(&self) -> &HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &*(self.ptr as *const HeaderVecHeader<H>) }
+        unsafe { &*(self.ptr.as_ptr() as *const HeaderVecHeader<H>) }
     }
 
     #[inline(always)]
     fn header_mut(&mut self) -> &mut HeaderVecHeader<H> {
         // The beginning of the memory is always the header.
-        unsafe { &mut *(self.ptr as *mut HeaderVecHeader<H>) }
+        unsafe { &mut *(self.ptr.as_ptr() as *mut HeaderVecHeader<H>) }
     }
 }
 
@@ -494,8 +498,52 @@ impl<H, T: Clone> HeaderVec<H, T> {
 
 #[cfg(feature = "atomic_append")]
 /// The atomic append API is only enabled when the `atomic_append` feature flag is set (which
-/// is the default).
+/// is the default). The [`push_atomic()`] or [`extend_from_slice_atomic()`] methods then
+/// become available and some internals using atomic operations.
+///
+/// This API implements interior-mutable appending to a shared `HeaderVec`. To other threads
+/// the appended elements are either not seen or all seen at once. Without additional
+/// synchronization these appends are racy but memory safe. The intention behind this API is to
+/// provide facilities for building other container abstractions the benefit from the shared
+/// non blocking nature while being unaffected from the racy semantics or provide synchronization
+/// on their own (Eg: reference counted data, interners, streaming parsers, etc). Since the
+/// `HeaderVec` is a shared object and we have only a `&self`, it can not be reallocated and moved,
+/// therefore appending can only be done within the reserved capacity.
+///
+/// # Safety
+///
+/// Only one single thread must try to [`push_atomic()`] or [`extend_from_slice_atomic()`] the
+/// `HeaderVec` at at time using the atomic append API's. The actual implementations of this
+/// restriction is left to the caller.  This can be done by mutexes or guard objects. Or
+/// simply by staying single threaded or ensuring somehow else that there is only a single
+/// thread using the atomic_appending API.
 impl<H, T> HeaderVec<H, T> {
+    /// Atomically adds an item to the end of the list without reallocation.
+    ///
+    /// # Errors
+    ///
+    /// If the vector is full, the item is returned.
+    ///
+    /// # Safety
+    ///
+    /// There must be only one thread calling this method at any time. Synchronization has to
+    /// be provided by the user.
+    pub unsafe fn push_atomic(&self, item: T) -> Result<(), T> {
+        // relaxed is good enough here because this should be the only thread calling this method.
+        let len = self.len_atomic_relaxed();
+        if len < self.capacity() {
+            unsafe {
+                core::ptr::write(self.end_ptr_atomic_mut(), item);
+            };
+            let len_again = self.len_atomic_add_release(1);
+            // in debug builds we check for races, the chance to catch these are still pretty minimal
+            debug_assert_eq!(len_again, len, "len was updated by another thread");
+            Ok(())
+        } else {
+            Err(item)
+        }
+    }
+
     /// Get the length of the vector with `Ordering::Acquire`. This ensures that the length is
     /// properly synchronized after it got atomically updated.
     #[inline(always)]
@@ -521,47 +569,11 @@ impl<H, T> HeaderVec<H, T> {
         self.header().len.fetch_add(n, Ordering::Release)
     }
 
-    #[inline(always)]
-    pub fn is_empty_atomic_acquire(&self) -> bool {
-        self.len_atomic_acquire() == 0
-    }
-
-    #[inline(always)]
-    pub fn as_slice_atomic_acquire(&self) -> &[T] {
-        unsafe { core::slice::from_raw_parts(self.start_ptr(), self.len_atomic_acquire()) }
-    }
-
     /// Gets the pointer to the end of the slice. This returns a mutable pointer to
     /// uninitialized memory behind the last element.
     #[inline(always)]
     fn end_ptr_atomic_mut(&self) -> *mut T {
         unsafe { self.start_ptr().add(self.len_atomic_acquire()) as *mut T }
-    }
-
-    /// Atomically adds an item to the end of the list without reallocation.
-    ///
-    /// # Errors
-    ///
-    /// If the vector is full, the item is returned.
-    ///
-    /// # Safety
-    ///
-    /// There must be only one thread calling this method at any time. Synchronization has to
-    /// be provided by the user.
-    pub unsafe fn push_atomic(&self, item: T) -> Result<(), T> {
-        // relaxed is good enough here because this should be the only thread calling this method.
-        let len = self.len_atomic_relaxed();
-        if len < self.capacity() {
-            unsafe {
-                core::ptr::write(self.end_ptr_atomic_mut(), item);
-            };
-            let len_again = self.len_atomic_add_release(1);
-            // in debug builds we check for races, the chance to catch these are still pretty minimal
-            debug_assert_eq!(len_again, len, "len was updated by another thread");
-            Ok(())
-        } else {
-            Err(item)
-        }
     }
 }
 
@@ -607,7 +619,7 @@ impl<H, T> Drop for HeaderVec<H, T> {
             for ix in 0..self.len_exact() {
                 ptr::drop_in_place(self.start_ptr_mut().add(ix));
             }
-            alloc::alloc::dealloc(self.ptr as *mut u8, Self::layout(self.capacity()));
+            alloc::alloc::dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.capacity()));
         }
     }
 }

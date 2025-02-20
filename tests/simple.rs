@@ -12,6 +12,20 @@ struct TestA {
 }
 
 #[test]
+fn test_sizeof() {
+    // assert that HeaderVec is really a single lean pointer
+    assert_eq!(
+        core::mem::size_of::<HeaderVec<(), ()>>(),
+        core::mem::size_of::<*mut ()>()
+    );
+    // and has space for niche optimization
+    assert_eq!(
+        core::mem::size_of::<HeaderVec<(), ()>>(),
+        core::mem::size_of::<Option<HeaderVec<(), ()>>>()
+    );
+}
+
+#[test]
 fn test_empty() {
     let mut v_empty = HeaderVec::with_capacity(0, TestA { a: 4, b: !0, c: 66 });
 
