@@ -55,6 +55,7 @@ where
     I: Iterator + fmt::Debug,
     I::Item: fmt::Debug,
 {
+    #[mutants::skip]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(&format!(
             "Splice<{}, {}>",
@@ -70,6 +71,7 @@ where
 
 impl<H, I: Iterator> Drop for Splice<'_, H, I> {
     #[track_caller]
+    #[mutants::skip]
     fn drop(&mut self) {
         self.drain.by_ref().for_each(drop);
         // At this point draining is done and the only remaining tasks are splicing

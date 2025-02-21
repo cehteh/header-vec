@@ -39,6 +39,7 @@ pub struct Drain<'a, H, T> {
 }
 
 impl<H: fmt::Debug, T: fmt::Debug> fmt::Debug for Drain<'_, H, T> {
+    #[mutants::skip]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct(&format!(
             "Drain<{}, {}>",

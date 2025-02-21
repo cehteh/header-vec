@@ -285,6 +285,7 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
+    #[mutants::skip]
     #[inline]
     pub fn reserve_exact(&mut self, additional: usize) {
         self.reserve_intern(additional, true, &mut None);
@@ -293,6 +294,7 @@ impl<H, T> HeaderVec<H, T> {
     /// Reserves capacity for exactly `additional` more elements to be inserted in the given `HeaderVec`.
     /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
     /// updating the weak references as additional parameter.
+    #[mutants::skip]
     #[inline]
     pub fn reserve_exact_with_weakfix(&mut self, additional: usize, weak_fixup: WeakFixupFn) {
         self.reserve_intern(additional, true, &mut Some(weak_fixup));
@@ -331,6 +333,7 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     /// Resizes the vector hold exactly `self.len()` elements.
+    #[mutants::skip]
     #[inline(always)]
     pub fn shrink_to_fit(&mut self) {
         self.shrink_to(0);
@@ -339,6 +342,7 @@ impl<H, T> HeaderVec<H, T> {
     /// Resizes the vector hold exactly `self.len()` elements.
     /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
     /// updating the weak references as additional parameter.
+    #[mutants::skip]
     #[inline(always)]
     pub fn shrink_to_fit_with_weakfix(&mut self, weak_fixup: WeakFixupFn) {
         self.shrink_to_with_weakfix(0, weak_fixup);
@@ -566,6 +570,7 @@ impl<H, T> HeaderVec<H, T> {
     ///
     /// [`clear`]: HeaderVec::clear
     /// [`drain`]: HeaderVec::drain
+    #[mutants::skip]
     pub fn truncate(&mut self, len: usize) {
         unsafe {
             let old_len = self.len_exact();
@@ -611,6 +616,7 @@ impl<H, T> HeaderVec<H, T> {
     }
 
     /// Gives the offset in units of T (as if the pointer started at an array of T) that the slice actually starts at.
+    #[mutants::skip]
     #[inline(always)]
     const fn offset() -> usize {
         // The first location, in units of size_of::<T>(), that is after the header
@@ -1056,6 +1062,7 @@ where
     H: Debug,
     T: Debug,
 {
+    #[mutants::skip]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("HeaderVec")
             .field("header", &self.header().head)

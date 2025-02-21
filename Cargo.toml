@@ -22,3 +22,6 @@ xmacro = "0.2.0"
 # include debug info for flamgraph and other profiling tools
 [profile.bench]
 debug = true
+
+[dependencies]
+mutants = "0.0.3"
