@@ -114,6 +114,25 @@ impl<H, T> HeaderVec<H, T> {
         this
     }
 
+    /// Creates a new `HeaderVec` with the given header from owned elements.
+    /// This functions consumes elements from a `IntoIterator<Item = T>` and creates
+    /// a `HeaderVec` from these. See [`from_header_slice()`] which creates a `HeaderVec`
+    /// by cloning elements from a slice.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use header_vec::HeaderVec;
+    /// let hv = HeaderVec::from_header_elements(42, [1, 2, 3]);
+    /// assert_eq!(hv.as_slice(), [1, 2, 3]);
+    /// ```
+    pub fn from_header_elements(header: H, elements: impl IntoIterator<Item = T>) -> Self {
+        let iter = elements.into_iter();
+        let mut hv = HeaderVec::with_capacity(iter.size_hint().0, header);
+        hv.extend(iter);
+        hv
+    }
+
     /// Get the length of the vector from a mutable reference.  When one has a `&mut
     /// HeaderVec`, this is the method is always exact and can be slightly faster than the non
     /// mutable `len()`.
@@ -655,6 +674,8 @@ impl<H, T> HeaderVec<H, T> {
 
 impl<H, T: Clone> HeaderVec<H, T> {
     /// Creates a new `HeaderVec` with the given header from some data.
+    /// The data cloned from a `AsRef<[T]>`, see [`from_header_elements()`] for
+    /// constructing a `HeaderVec` from owned elements.
     pub fn from_header_slice(header: H, slice: impl AsRef<[T]>) -> Self {
         let slice = slice.as_ref();
         let mut hv = Self::with_capacity(slice.len(), header);
