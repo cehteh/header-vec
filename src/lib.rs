@@ -820,10 +820,10 @@ impl<H, T: Clone> HeaderVec<H, T> {
                 }
             }
             // correct the len
-            let len_again = self.len_atomic_add_release(slice.len());
+            let _len_again = self.len_atomic_add_release(slice.len());
             // in debug builds we check for races, the chance to catch these are still pretty minimal
             #[cfg(debug_assertions)]
-            debug_assert_eq!(len_again, len, "len was updated by another thread");
+            debug_assert_eq!(_len_again, len, "len was updated by another thread");
             Ok(())
         } else {
             Err(slice)
