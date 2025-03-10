@@ -136,6 +136,7 @@ impl<H, T> HeaderVec<H, T> {
     /// Get the length of the vector from a mutable reference.  When one has a `&mut
     /// HeaderVec`, this is the method is always exact and can be slightly faster than the non
     /// mutable `len()`.
+    #[mutants::skip]
     #[inline(always)]
     pub fn len_exact(&mut self) -> usize {
         #[cfg(feature = "atomic_append")]
@@ -151,6 +152,7 @@ impl<H, T> HeaderVec<H, T> {
     /// This gives the length of the `HeaderVec`. This is the non synchronized variant may
     /// produce racy results in case another thread atomically appended to
     /// `&self`. Nevertheless it is always safe to use.
+    #[mutants::skip]
     #[inline(always)]
     pub fn len(&self) -> usize {
         #[cfg(feature = "atomic_append")]
