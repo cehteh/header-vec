@@ -89,29 +89,31 @@ impl<H, T> HeaderVec<H, T> {
     /// Get the length of the vector from a mutable reference.  When one has a `&mut
     /// HeaderVec`, this is the method is always exact and can be slightly faster than the non
     /// mutable `len()`.
-    #[cfg(feature = "atomic_append")]
     #[inline(always)]
     pub fn len_exact(&mut self) -> usize {
-        *self.header_mut().len.get_mut()
-    }
-    #[cfg(not(feature = "atomic_append"))]
-    #[inline(always)]
-    pub fn len_exact(&mut self) -> usize {
-        self.header_mut().len
+        #[cfg(feature = "atomic_append")]
+        {
+            *self.header_mut().len.get_mut()
+        }
+        #[cfg(not(feature = "atomic_append"))]
+        {
+            self.header_mut().len
+        }
     }
 
     /// This gives the length of the `HeaderVec`. This is the non synchronized variant may
     /// produce racy results in case another thread atomically appended to
     /// `&self`. Nevertheless it is always safe to use.
-    #[cfg(feature = "atomic_append")]
     #[inline(always)]
     pub fn len(&self) -> usize {
-        self.len_atomic_relaxed()
-    }
-    #[cfg(not(feature = "atomic_append"))]
-    #[inline(always)]
-    pub fn len(&self) -> usize {
-        self.header().len
+        #[cfg(feature = "atomic_append")]
+        {
+            self.len_atomic_relaxed()
+        }
+        #[cfg(not(feature = "atomic_append"))]
+        {
+            self.header().len
+        }
     }
 
     /// This gives the length of the `HeaderVec`. With `atomic_append` enabled this gives a
@@ -119,15 +121,16 @@ impl<H, T> HeaderVec<H, T> {
     /// requires synchronization because the length may become invalidated when another thread
     /// atomically appends data to this `HeaderVec` while we still work with the result of
     /// this method.
-    #[cfg(not(feature = "atomic_append"))]
     #[inline(always)]
     pub fn len_strict(&self) -> usize {
-        self.header().len
-    }
-    #[cfg(feature = "atomic_append")]
-    #[inline(always)]
-    pub fn len_strict(&self) -> usize {
-        self.len_atomic_acquire()
+        #[cfg(feature = "atomic_append")]
+        {
+            self.len_atomic_acquire()
+        }
+        #[cfg(not(feature = "atomic_append"))]
+        {
+            self.header().len
+        }
     }
 
     /// Check whenever a `HeaderVec` is empty. This uses a `&mut self` reference and is
