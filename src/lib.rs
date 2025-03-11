@@ -116,7 +116,7 @@ impl<H, T> HeaderVec<H, T> {
 
     /// Creates a new `HeaderVec` with the given header from owned elements.
     /// This functions consumes elements from a `IntoIterator<Item = T>` and creates
-    /// a `HeaderVec` from these. See [`from_header_slice()`] which creates a `HeaderVec`
+    /// a `HeaderVec` from these. See [`HeaderVec::from_header_slice()`] which creates a `HeaderVec`
     /// by cloning elements from a slice.
     ///
     /// # Example
@@ -196,7 +196,7 @@ impl<H, T> HeaderVec<H, T> {
         self.len() == 0
     }
 
-    /// Check whenever a `HeaderVec` is empty. see [`len_strict()`] about the exactness guarantees.
+    /// Check whenever a `HeaderVec` is empty. see [`HeaderVec::len_strict()`] about the exactness guarantees.
     #[inline(always)]
     pub fn is_empty_strict(&self) -> bool {
         self.len_strict() == 0
@@ -495,7 +495,7 @@ impl<H, T> HeaderVec<H, T> {
     ///
     /// The returned slice can be used to fill the vector with data (e.g. by
     /// reading from a file) before marking the data as initialized using the
-    /// [`set_len`] method.
+    /// [`HeaderVec::set_len()`] method.
     ///
     pub fn spare_capacity_mut(&mut self) -> &mut [MaybeUninit<T>] {
         unsafe {
@@ -516,7 +516,7 @@ impl<H, T> HeaderVec<H, T> {
     ///
     /// # Safety
     ///
-    /// - `new_len` must be less than or equal to [`capacity()`].
+    /// - `new_len` must be less than or equal to [`HeaderVec::capacity()`].
     /// - The elements at `old_len..new_len` must be initialized.
     pub unsafe fn set_len(&mut self, new_len: usize) {
         debug_assert!(
@@ -682,7 +682,7 @@ impl<H, T> HeaderVec<H, T> {
 
 impl<H, T: Clone> HeaderVec<H, T> {
     /// Creates a new `HeaderVec` with the given header from some data.
-    /// The data cloned from a `AsRef<[T]>`, see [`from_header_elements()`] for
+    /// The data cloned from a `AsRef<[T]>`, see [`HeaderVec::from_header_elements()`] for
     /// constructing a `HeaderVec` from owned elements.
     pub fn from_header_slice(header: H, slice: impl AsRef<[T]>) -> Self {
         let slice = slice.as_ref();
@@ -725,7 +725,7 @@ impl<H, T: Clone> HeaderVec<H, T> {
 
 #[cfg(feature = "atomic_append")]
 /// The atomic append API is only enabled when the `atomic_append` feature flag is set (which
-/// is the default). The [`push_atomic()`] or [`extend_from_slice_atomic()`] methods then
+/// is the default). The [`HeaderVec::push_atomic()`] or [`HeaderVec::extend_from_slice_atomic()`] methods then
 /// become available and some internals using atomic operations.
 ///
 /// This API implements interior-mutable appending to a shared `HeaderVec`. To other threads
@@ -739,7 +739,7 @@ impl<H, T: Clone> HeaderVec<H, T> {
 ///
 /// # Safety
 ///
-/// Only one single thread must try to [`push_atomic()`] or [`extend_from_slice_atomic()`] the
+/// Only one single thread must try to [`HeaderVec::push_atomic()`] or [`HeaderVec::extend_from_slice_atomic()`] the
 /// `HeaderVec` at at time using the atomic append API's. The actual implementations of this
 /// restriction is left to the caller.  This can be done by mutexes or guard objects. Or
 /// simply by staying single threaded or ensuring somehow else that there is only a single
@@ -951,7 +951,7 @@ impl<H, T> HeaderVec<H, T> {
         self.splice_internal(range, replace_with, None)
     }
 
-    /// Creates a splicing iterator like [`splice()`].
+    /// Creates a splicing iterator like [`HeaderVec::splice()`].
     /// This method must be used when `HeaderVecWeak` are used. It takes a closure that is responsible for
     /// updating the weak references as additional parameter.
     #[inline]
