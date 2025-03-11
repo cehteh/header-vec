@@ -1129,3 +1129,68 @@ impl<'a, H, T: Copy + 'a> Extend<&'a T> for HeaderVec<H, T> {
         iter.for_each(|item| self.push(*item));
     }
 }
+
+/// Creates a HeaderVec with an optional header and elements. Similar to what the stdlib
+/// `vec!()` macro does for `Vec`. When no header is provided, the unit `()` is used.
+/// Note that the syntax differs slightly from the `vec!()` macro. When a header is provided, it
+/// must be followed by a semicolon before the elements are in a square bracket list. This is to
+/// distinguish between the header and the elements.
+///
+/// # Examples
+///
+/// ```
+/// # use header_vec::header_vec;
+/// // Create a HeaderVec with default header `()`
+/// let v = header_vec![1, 2, 3];
+/// assert_eq!(*v, ());
+/// assert_eq!(v.as_slice(), &[1, 2, 3]);
+///
+/// // Create a HeaderVec with a custom header
+/// let v = header_vec!("header"; [1, 2, 3]);
+/// assert_eq!(*v, "header");
+/// assert_eq!(v.as_slice(), &[1, 2, 3]);
+///
+/// // Create a HeaderVec with repetition (default header `()`)
+/// let v = header_vec![42; 5];
+/// assert_eq!(*v, ());
+/// assert_eq!(v.as_slice(), &[42, 42, 42, 42, 42]);
+///
+/// // Create a HeaderVec with custom header and repetition
+/// let v = header_vec!("header"; [42; 5]);
+/// assert_eq!(*v, "header");
+/// assert_eq!(v.as_slice(), &[42, 42, 42, 42, 42]);
+/// ```
+#[macro_export]
+macro_rules! header_vec {
+    () => {
+        $crate::HeaderVec::new(())
+    };
+
+    ($header:expr; []) => {
+        $crate::HeaderVec::new($header)
+    };
+
+    ($header:expr; [$($elem:expr),+ $(,)?]) => {{
+        let mut vec = $crate::HeaderVec::new($header);
+        vec.extend(IntoIterator::into_iter([$($elem),+]));
+        vec
+    }};
+
+    ($header:expr; [$elem:expr; $n:expr]) => {{
+        let mut vec = $crate::HeaderVec::new($header);
+        vec.extend(std::iter::repeat($elem).take($n));
+        vec
+    }};
+
+    ($elem:expr; $n:expr) => {{
+        let mut vec = $crate::HeaderVec::new(());
+        vec.extend(std::iter::repeat($elem).take($n));
+        vec
+    }};
+
+    ($($elem:expr),+ $(,)?) => {{
+        let mut vec = $crate::HeaderVec::new(());
+        vec.extend(IntoIterator::into_iter([$($elem),+]));
+        vec
+    }};
+}
