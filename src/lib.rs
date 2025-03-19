@@ -617,6 +617,42 @@ impl<H, T> HeaderVec<H, T> {
         }
     }
 
+    /// Consumes a `HeaderVec`, returning references to the header and data.
+    ///
+    /// Note that the header type H must outlive the chosen lifetime 'a and the data type T
+    /// must outlive the chosen lifetime 'b.  When the types have only static references, or
+    /// none at all, then these may be chosen to be 'static.
+    ///
+    /// This method does not reallocate or shrink the `HeaderVec`, so the leaked allocation
+    /// may include unused capacity that is not part of the returned slice.
+    ///
+    /// This function is mainly useful for data that lives for the remainder of the program’s
+    /// life. Dropping the returned references will cause a memory leak.
+    ///
+    /// # Example
+    ///
+    //  This example can't be run in miri because it leaks memory.
+    /// ```
+    /// # #[cfg(miri)] fn main() {}
+    /// # #[cfg(not(miri))]
+    /// # fn main() {
+    /// use header_vec::HeaderVec;
+    ///
+    /// let mut hv = HeaderVec::from_header_elements(42, [1, 2, 3]);
+    /// let (header, data) = hv.leak();
+    /// assert_eq!(header, &42);
+    /// assert_eq!(data, &[1, 2, 3]);
+    /// # }
+    /// ```
+    pub fn leak<'a,'b>(mut self) -> (&'a H, &'b mut [T]) {
+        let len = self.len_exact();
+        let ptr = self.as_mut_ptr();
+        let header = &mut self.header_mut().head as *mut H;
+        let slice = unsafe { slice::from_raw_parts_mut(ptr, len) };
+        mem::forget(self);
+        (unsafe {header.as_mut().unwrap_unchecked()}, slice)
+    }
+
     /// Gives the offset in units of T (as if the pointer started at an array of T) that the slice actually starts at.
     #[mutants::skip]
     #[inline(always)]
