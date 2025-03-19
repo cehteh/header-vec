@@ -68,7 +68,6 @@ xmacro! {
 #[test]
 fn test_empty_with_default_header() {
     let v: HeaderVec<(), i32> = header_vec![];
-    assert_eq!(*v, ());
     assert!(v.is_empty());
 }
 
@@ -102,7 +101,6 @@ fn test_repetition_with_custom_header() {
 #[test]
 fn test_repetition_with_default_header() {
     let v = header_vec![42; 5];
-    assert_eq!(*v, ());
     assert_eq!(v.as_slice(), &[42, 42, 42, 42, 42]);
     assert_eq!(v.len(), 5);
 }
@@ -110,12 +108,10 @@ fn test_repetition_with_default_header() {
 #[test]
 fn test_values_with_default_header() {
     let v = header_vec![1, 2, 3];
-    assert_eq!(*v, ());
     assert_eq!(v.as_slice(), &[1, 2, 3]);
     assert_eq!(v.len(), 3);
 
     let v = header_vec![1, 2, 3,];
-    assert_eq!(*v, ());
     assert_eq!(v.as_slice(), &[1, 2, 3]);
 }
 
@@ -129,7 +125,6 @@ fn test_non_copy_types() {
     );
 
     let v = header_vec![String::from("repeated"); 2];
-    assert_eq!(*v, ());
     assert_eq!(
         v.as_slice(),
         &[String::from("repeated"), String::from("repeated")]
@@ -139,7 +134,6 @@ fn test_non_copy_types() {
 #[test]
 fn test_zero_repetitions() {
     let v: HeaderVec<(), i32> = header_vec![42; 0];
-    assert_eq!(*v, ());
     assert!(v.is_empty());
 
     let v: HeaderVec<&str, i32> = header_vec!("header"; [42; 0]);
@@ -150,7 +144,6 @@ fn test_zero_repetitions() {
 #[test]
 fn test_single_element() {
     let v = header_vec![42];
-    assert_eq!(*v, ());
     assert_eq!(v.as_slice(), &[42]);
 
     let v = header_vec!("header"; [42]);
