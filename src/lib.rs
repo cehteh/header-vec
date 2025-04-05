@@ -51,10 +51,11 @@ struct HeaderVecHeader<H> {
     len: usize,
 }
 
-// This union will be properly aligned and sized to store headers followed by T's.
-union AlignedHeader<H, T> {
-    _header: ManuallyDrop<HeaderVecHeader<H>>,
-    _data: ManuallyDrop<[T; 0]>,
+// This struct will be properly aligned and sized to store headers followed by T's.
+#[repr(C)]
+struct AlignedHeader<H, T> {
+    align: [T; 0],
+    header: HeaderVecHeader<H>,
 }
 
 /// A vector with a header of your choosing behind a thin pointer
