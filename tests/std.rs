@@ -29,7 +29,7 @@ fn test_drain() {
 }
 
 xmacro! {
-    $[
+    $(
         // tests with simple i32 lists
         name:                  init:              range: replace:     drained: result:
         nop_begin              [1, 2, 3, 4, 5, 6] (0..0) []           []       [1, 2, 3, 4, 5, 6]
@@ -51,7 +51,7 @@ xmacro! {
         replace_middle_longer  [1, 2, 3, 4, 5, 6] (3..5) [44, 55, 66] [4, 5]   [1, 2, 3, 44, 55, 66, 6]
         replace_end_longer     [1, 2, 3, 4, 5, 6] (4..)  [66, 77, 88] [5, 6]   [1, 2, 3, 4, 66, 77, 88]
         big_nop                [[1; 64]; 64]      (0..0) [[0; 64]; 0] [[0; 64]; 0] [[1; 64]; 64]
-    ]
+    )
 
     #[test]
     fn $+test_splice_$name() {
